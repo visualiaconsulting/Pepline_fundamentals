@@ -18,6 +18,7 @@ from dashboard.components.charts import (
     weighted_contribution,
 )
 from dashboard.components.kpis import render_kpis
+from dashboard.components.news import render_news_tab
 from dashboard.config import CLASSIFICATION_ORDER
 from dashboard.data_loader import apply_filters, load_data
 
@@ -72,8 +73,8 @@ filtered_df = apply_filters(
 
 render_kpis(filtered_df)
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Resumen Ejecutivo", "Fundamentales", "Riesgo y Valuacion", "Scoring"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Resumen Ejecutivo", "Fundamentales", "Riesgo y Valuacion", "Scoring", "📰 Noticias"]
 )
 
 with tab1:
@@ -115,6 +116,9 @@ with tab4:
     c1, c2 = st.columns(2)
     c1.plotly_chart(score_components_heatmap(filtered_df), use_container_width=True)
     c2.plotly_chart(weighted_contribution(filtered_df), use_container_width=True)
+
+with tab5:
+    render_news_tab(filtered_df)
 
 st.divider()
 st.subheader("Top 10 Oficial del Pipeline")
