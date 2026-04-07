@@ -67,26 +67,52 @@ def fetch_news_for_tickers(tickers: tuple[str, ...]) -> Dict[str, pd.DataFrame]:
 
             rows = []
             for item in raw:
-                title = item.get("title", "")
+                # yfinance >= 1.x nests data under item["content"]
+                # older versions had flat keys at item level — support both
+                content = item.get("content") or item
+
+                title = content.get("title", "")
+                if not title:
+                    continue
+
                 label, icon, color = classify_sentiment(title)
-                # published can be epoch int or None
-                pub = item.get("providerPublishTime") or item.get("published")
+
+                # Publisher: new format → content["provider"]["displayName"]
+                provider = content.get("provider") or {}
+                publisher = (
+                    provider.get("displayName")
+                    or item.get("publisher")
+                    or "—"
+                )
+
+                # Link: new format → content["canonicalUrl"]["url"]
+                canonical = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
+                link = canonical.get("url") or item.get("link", "")
+
+                # Published date: new format → ISO string "2026-04-07T20:20:00Z"
+                pub = (
+                    content.get("pubDate")
+                    or item.get("providerPublishTime")
+                    or item.get("published")
+                )
                 if isinstance(pub, (int, float)):
                     pub_str = datetime.fromtimestamp(pub).strftime("%Y-%m-%d %H:%M")
+                elif isinstance(pub, str) and pub:
+                    # ISO format → trim to date+time
+                    pub_str = pub[:16].replace("T", " ")
                 else:
-                    pub_str = str(pub) if pub else "—"
+                    pub_str = "—"
 
                 rows.append({
                     "sentiment_icon": icon,
                     "sentiment":      label,
                     "title":          title,
-                    "publisher":      item.get("publisher", "—"),
-                    "link":           item.get("link", ""),
+                    "publisher":      publisher,
+                    "link":           link,
                     "published":      pub_str,
                     "_color":         color,
                 })
-            df = pd.DataFrame(rows)
-            results[ticker] = df
+            results[ticker] = pd.DataFrame(rows)
         except Exception:
             results[ticker] = pd.DataFrame()
     return results
