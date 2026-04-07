@@ -211,6 +211,44 @@ def _impact_summary(df: pd.DataFrame) -> str:
     return f"Impacto: {left}  ·  {right}"
 
 
+def _impact_to_float(value: str) -> float | None:
+    """Convert formatted impact string like '+1.23%' to float."""
+    if not isinstance(value, str) or value.strip() in {"", "—"}:
+        return None
+    parsed = pd.to_numeric(value.replace("%", ""), errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return float(parsed)
+
+
+def _build_cross_ticker_news_frame(news_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Flatten ticker->news mapping into one table for global ranking and alerts."""
+    rows: list[dict] = []
+    for ticker, df_news in news_dict.items():
+        if df_news is None or df_news.empty:
+            continue
+        for _, item in df_news.iterrows():
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "sentiment": item.get("sentiment", "Neutral"),
+                    "catalyst": item.get("catalyst", "General"),
+                    "title": item.get("title", ""),
+                    "publisher": item.get("publisher", "—"),
+                    "published": item.get("published", "—"),
+                    "impact_1d": item.get("impact_1d", "—"),
+                    "impact_5d": item.get("impact_5d", "—"),
+                    "link": item.get("link", ""),
+                }
+            )
+    if not rows:
+        return pd.DataFrame()
+    df_all = pd.DataFrame(rows)
+    df_all["impact_1d_num"] = df_all["impact_1d"].apply(_impact_to_float)
+    df_all["impact_5d_num"] = df_all["impact_5d"].apply(_impact_to_float)
+    return df_all
+
+
 def render_news_tab(filtered_df: pd.DataFrame) -> None:
     """Render the full Noticias tab content."""
 
@@ -241,6 +279,38 @@ def render_news_tab(filtered_df: pd.DataFrame) -> None:
     # --- Fetch news (cached) ---
     with st.spinner("Cargando noticias..."):
         news_dict = fetch_news_for_tickers(tuple(top20_tickers))
+
+    # --- Global alerts and top movers across all news in Top 20 ---
+    df_all_news = _build_cross_ticker_news_frame(news_dict)
+    if not df_all_news.empty:
+        severe = df_all_news[
+            (df_all_news["impact_1d_num"].notna() & (df_all_news["impact_1d_num"] <= -3.0))
+            | (df_all_news["impact_5d_num"].notna() & (df_all_news["impact_5d_num"] <= -5.0))
+        ].sort_values(["impact_1d_num", "impact_5d_num"], ascending=True)
+
+        if not severe.empty:
+            st.warning(
+                f"Se detectaron {len(severe)} noticias con impacto negativo relevante "
+                "(umbral: +1d <= -3% o +5d <= -5%)."
+            )
+            alert_table = severe[[
+                "ticker", "published", "sentiment", "catalyst", "impact_1d", "impact_5d", "title"
+            ]].head(12)
+            st.dataframe(alert_table, use_container_width=True, hide_index=True)
+        else:
+            st.success("Sin alertas negativas fuertes en las noticias analizadas del Top 20.")
+
+        movers = df_all_news.copy()
+        movers["move_abs"] = movers[["impact_1d_num", "impact_5d_num"]].abs().max(axis=1)
+        movers = movers[movers["move_abs"].notna()].sort_values("move_abs", ascending=False).head(15)
+        if not movers.empty:
+            st.caption("Noticias que más movieron precio (Top 15 por magnitud de impacto)")
+            movers_table = movers[[
+                "ticker", "published", "sentiment", "catalyst", "impact_1d", "impact_5d", "title"
+            ]]
+            st.dataframe(movers_table, use_container_width=True, hide_index=True)
+    else:
+        st.info("No se pudieron construir alertas globales porque no hay noticias disponibles en este ciclo.")
 
     # --- Ticker selector ---
     # Build a lookup dict for ticker metadata to avoid repeated loc calls
