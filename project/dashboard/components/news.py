@@ -35,6 +35,16 @@ _SENTIMENT_META = {
     "Neutral":  ("🟡", "#d29922"),
 }
 
+_CATALYST_RULES = [
+    ("Resultados", {"earnings", "eps", "revenue", "guidance", "quarter", "q1", "q2", "q3", "q4"}),
+    ("Analistas", {"upgrade", "upgraded", "downgrade", "downgraded", "target", "rating", "buy", "sell"}),
+    ("M&A", {"acquisition", "acquire", "merger", "takeover", "buyout"}),
+    ("Producto/IA", {"launch", "product", "chip", "ai", "model", "platform", "release"}),
+    ("Regulatorio/Legal", {"investigation", "lawsuit", "regulator", "fine", "penalty", "antitrust"}),
+    ("Contratos", {"contract", "deal", "partnership", "award", "agreement"}),
+    ("Dividendos/Capital", {"dividend", "buyback", "repurchase", "offering", "issuance"}),
+]
+
 
 def classify_sentiment(title: str) -> tuple[str, str, str]:
     """Return (label, icon, color) for a news headline using keyword matching."""
@@ -51,6 +61,51 @@ def classify_sentiment(title: str) -> tuple[str, str, str]:
     return label, icon, color
 
 
+def classify_catalyst(title: str) -> str:
+    """Classify the likely catalyst category from a headline."""
+    words = set(re.findall(r"\b\w+\b", title.lower()))
+    for category, keywords in _CATALYST_RULES:
+        if words & keywords:
+            return category
+    return "General"
+
+
+def _compute_forward_returns(price_df: pd.DataFrame, published_value: str) -> tuple[str, str]:
+    """Estimate +1d and +5d returns from the next available close after publication."""
+    if price_df.empty or not published_value or published_value == "—":
+        return "—", "—"
+
+    try:
+        pub_dt = pd.to_datetime(published_value, errors="coerce")
+        if pd.isna(pub_dt):
+            return "—", "—"
+
+        # Compare at date level against trading sessions.
+        trading_dates = pd.to_datetime(price_df.index).normalize()
+        target_date = pub_dt.normalize()
+        start_positions = [i for i, d in enumerate(trading_dates) if d >= target_date]
+        if not start_positions:
+            return "—", "—"
+
+        start_idx = start_positions[0]
+        closes = price_df["Close"].astype(float).tolist()
+        base = closes[start_idx]
+        if base <= 0:
+            return "—", "—"
+
+        ret_1d = "—"
+        ret_5d = "—"
+        if start_idx + 1 < len(closes):
+            r1 = (closes[start_idx + 1] / base - 1.0) * 100.0
+            ret_1d = f"{r1:+.2f}%"
+        if start_idx + 5 < len(closes):
+            r5 = (closes[start_idx + 5] / base - 1.0) * 100.0
+            ret_5d = f"{r5:+.2f}%"
+        return ret_1d, ret_5d
+    except Exception:
+        return "—", "—"
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_news_for_tickers(tickers: tuple[str, ...]) -> Dict[str, pd.DataFrame]:
     """Fetch Yahoo Finance news for a list of tickers. Cached for 30 minutes.
@@ -60,6 +115,9 @@ def fetch_news_for_tickers(tickers: tuple[str, ...]) -> Dict[str, pd.DataFrame]:
     results: Dict[str, pd.DataFrame] = {}
     for ticker in tickers:
         try:
+            # Daily prices are used to estimate simple post-news impact.
+            downloaded = yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+            price_df = downloaded if downloaded is not None else pd.DataFrame()
             raw = yf.Ticker(ticker).news or []
             if not raw:
                 results[ticker] = pd.DataFrame()
@@ -76,6 +134,7 @@ def fetch_news_for_tickers(tickers: tuple[str, ...]) -> Dict[str, pd.DataFrame]:
                     continue
 
                 label, icon, color = classify_sentiment(title)
+                catalyst = classify_catalyst(title)
 
                 # Publisher: new format → content["provider"]["displayName"]
                 provider = content.get("provider") or {}
@@ -103,13 +162,18 @@ def fetch_news_for_tickers(tickers: tuple[str, ...]) -> Dict[str, pd.DataFrame]:
                 else:
                     pub_str = "—"
 
+                impact_1d, impact_5d = _compute_forward_returns(price_df, pub_str)
+
                 rows.append({
                     "sentiment_icon": icon,
                     "sentiment":      label,
+                    "catalyst":       catalyst,
                     "title":          title,
                     "publisher":      publisher,
                     "link":           link,
                     "published":      pub_str,
+                    "impact_1d":      impact_1d,
+                    "impact_5d":      impact_5d,
                     "_color":         color,
                 })
             results[ticker] = pd.DataFrame(rows)
@@ -127,6 +191,24 @@ def _sentiment_bar(df: pd.DataFrame) -> str:
     neu = counts.get("Neutral", 0)
     neg = counts.get("Negativo", 0)
     return f"🟢 {pos} Positivas  ·  🟡 {neu} Neutrales  ·  🔴 {neg} Negativas"
+
+
+def _impact_summary(df: pd.DataFrame) -> str:
+    """Return average +1d and +5d impact from parsed percentage strings."""
+    if df.empty:
+        return "Impacto: sin datos"
+
+    temp = df.copy()
+    temp["impact_1d_num"] = pd.to_numeric(temp["impact_1d"].str.replace("%", "", regex=False), errors="coerce")
+    temp["impact_5d_num"] = pd.to_numeric(temp["impact_5d"].str.replace("%", "", regex=False), errors="coerce")
+    m1 = temp["impact_1d_num"].mean(skipna=True)
+    m5 = temp["impact_5d_num"].mean(skipna=True)
+
+    if pd.isna(m1) and pd.isna(m5):
+        return "Impacto: sin datos"
+    left = f"+1d promedio {m1:+.2f}%" if not pd.isna(m1) else "+1d promedio —"
+    right = f"+5d promedio {m5:+.2f}%" if not pd.isna(m5) else "+5d promedio —"
+    return f"Impacto: {left}  ·  {right}"
 
 
 def render_news_tab(filtered_df: pd.DataFrame) -> None:
@@ -202,7 +284,8 @@ def render_news_tab(filtered_df: pd.DataFrame) -> None:
             sector = row["sector"].values[0]
             df_news = news_dict.get(ticker, pd.DataFrame())
             sentiment_summary = _sentiment_bar(df_news)
-            label = f"**{ticker}** · {clf} · Score {score:.1f} · {sector}  — {sentiment_summary}"
+            impact_summary = _impact_summary(df_news)
+            label = f"**{ticker}** · {clf} · Score {score:.1f} · {sector}  — {sentiment_summary} · {impact_summary}"
             with st.expander(label, expanded=False):
                 _render_news_table(ticker, df_news)
 
@@ -227,6 +310,13 @@ def _render_ticker_news(ticker: str, filtered_df: pd.DataFrame, news_dict: dict)
     c4.metric("Sector", sector)
 
     st.markdown(f"**Sentimiento:** {_sentiment_bar(df_news)}")
+    st.markdown(f"**{_impact_summary(df_news)}**")
+
+    if not df_news.empty and "catalyst" in df_news.columns:
+        catalyst_counts = df_news["catalyst"].value_counts().head(5)
+        st.caption("Catalizadores principales")
+        st.bar_chart(catalyst_counts)
+
     st.divider()
     _render_news_table(ticker, df_news)
 
@@ -244,6 +334,9 @@ def _render_news_table(ticker: str, df_news: pd.DataFrame) -> None:
         link = item["link"]
         publisher = item["publisher"]
         published = item["published"]
+        catalyst = item.get("catalyst", "General")
+        impact_1d = item.get("impact_1d", "—")
+        impact_5d = item.get("impact_5d", "—")
 
         title_md = f'<a href="{link}" target="_blank">{title}</a>' if link else title
         st.markdown(
@@ -255,7 +348,7 @@ def _render_news_table(ticker: str, df_news: pd.DataFrame) -> None:
                 border-radius: 4px;
             ">
             {icon} &nbsp; {title_md}<br>
-            <small style="color:#8b949e;">{publisher} &nbsp;·&nbsp; {published}</small>
+            <small style="color:#8b949e;">{publisher} &nbsp;·&nbsp; {published} &nbsp;·&nbsp; {catalyst} &nbsp;·&nbsp; +1d {impact_1d} &nbsp;·&nbsp; +5d {impact_5d}</small>
             </div>""",
             unsafe_allow_html=True,
         )
