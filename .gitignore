@@ -1,0 +1,44 @@
+# Entornos virtuales
+.venv/
+.venv-1/
+venv/
+env/
+
+# Variables de entorno (contienen API keys)
+project/.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Outputs generados (se regeneran al ejecutar el pipeline)
+project/data/company_ranking.csv
+project/data/top10_opportunities.csv
+project/data/top10_opportunities*.csv
+project/data/discovery_log.csv
+project/data/reports/
+
+# Logs
+project/logs/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Distribución / empaquetado
+dist/
+build/
+*.egg-info/
