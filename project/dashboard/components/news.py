@@ -211,13 +211,13 @@ def _impact_summary(df: pd.DataFrame) -> str:
     return f"Impacto: {left}  ·  {right}"
 
 
-def _impact_to_float(value: str) -> float | None:
-    """Convert formatted impact string like '+1.23%' to float."""
+def _impact_to_float(value: str) -> float:
+    """Convert formatted impact string like '+1.23%' to float, NaN when unavailable."""
     if not isinstance(value, str) or value.strip() in {"", "—"}:
-        return None
+        return float("nan")
     parsed = pd.to_numeric(value.replace("%", ""), errors="coerce")
     if pd.isna(parsed):
-        return None
+        return float("nan")
     return float(parsed)
 
 
@@ -301,6 +301,10 @@ def render_news_tab(filtered_df: pd.DataFrame) -> None:
             st.success("Sin alertas negativas fuertes en las noticias analizadas del Top 20.")
 
         movers = df_all_news.copy()
+        movers[["impact_1d_num", "impact_5d_num"]] = movers[["impact_1d_num", "impact_5d_num"]].apply(
+            pd.to_numeric,
+            errors="coerce",
+        )
         movers["move_abs"] = movers[["impact_1d_num", "impact_5d_num"]].abs().max(axis=1)
         movers = movers[movers["move_abs"].notna()].sort_values("move_abs", ascending=False).head(15)
         if not movers.empty:
