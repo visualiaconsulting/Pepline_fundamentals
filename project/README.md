@@ -35,7 +35,13 @@ Variables clave:
 - `DISCOVERY_SECTORS`: sectores que alimentan el discovery
 - `TICKER_BLOCKLIST`: tickers que nunca deben entrar por discovery
 - `ENABLE_LLM_SUMMARY`: activar resumen opcional LLM (`true/false`)
-- `OPENAI_API_KEY`: solo si usas LLM
+- `LLM_PROVIDER`: proveedor LLM (`openai` u `ollama`)
+- `OPENAI_API_KEY`: solo si usas OpenAI
+- `OPENAI_MODEL`: modelo OpenAI
+- `OLLAMA_BASE_URL`: endpoint local/remoto de Ollama
+- `OLLAMA_MODEL`: modelo Ollama (ejemplo: `gemma4:e2b`)
+- `OLLAMA_TIMEOUT_SECONDS`: timeout por request al modelo
+- `OLLAMA_MAX_HEADLINES_PER_TICKER`: limite de titulares por ticker para analisis
 
 ### Modo Híbrido: Portafolio Preferido + Nuevas Oportunidades
 
@@ -76,7 +82,14 @@ python main.py
 Visualizacion profesional sobre `data/company_ranking.csv` con:
 - KPIs ejecutivos
 - filtros globales (sector, clasificacion, origen ticker, score, market cap)
-- tabs de resumen, fundamentales, riesgo/valuacion y scoring
+- tabs de resumen, fundamentales, riesgo/valuacion, scoring y noticias
+
+Tab de noticias incluye:
+- sentimiento por titular
+- clasificacion de catalizadores
+- impacto estimado +1d / +5d
+- alertas negativas severas
+- top noticias que mas movieron precio en Top 20
 
 ### Instalacion dashboard
 
@@ -110,3 +123,12 @@ Se generan automáticamente:
 5. Scoring ponderado 0-100 (`analysis/scoring.py`)
 6. Ranking y export de reportes (`models/ranking_model.py`)
 7. Narrativa de tesis/riesgos/resumen opcional con LLM (`analysis/llm_summary.py`)
+
+## 6) Flujo de Trabajo Recomendado
+
+1. Actualiza codigo: `git pull origin main`
+2. Verifica dependencias: `pip install -r requirements.txt`
+3. Si usaras Ollama, confirma servicio y modelo (`ollama list`)
+4. Ejecuta pipeline: `python main.py`
+5. Abre dashboard: `python -m streamlit run dashboard/app.py`
+6. En tab Noticias, pulsa actualizar para refrescar feed y analisis

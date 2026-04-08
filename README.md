@@ -24,10 +24,10 @@
 - **Pipeline Modular**: 6 etapas independientes — ingesta → procesamiento → análisis → scoring → ranking → exportación
 - **Scoring Transparente**: 5 componentes con pesos explícitos (Calidad 30%, Crecimiento 25%, Rentabilidad 20%, Riesgo 15%, Valuación 10%)
 - **Descubrimiento Automático**: Encuentra nuevas oportunidades vía screener Finviz con filtros configurables
-- **Dashboard Oscuro**: Streamlit + Plotly con 4 tabs, filtros globales y múltiples tipos de gráficos
+- **Dashboard Oscuro**: Streamlit + Plotly con 5 tabs, filtros globales y múltiples tipos de gráficos
 - **100% Configurable**: Todos los parámetros en `.env` — sin hardcoding
 - **Auditería Completa**: `discovery_log.csv` y `pipeline.log` para trazabilidad total
-- **LLM Opcional**: Thesis de inversión y análisis de riesgos vía OpenAI (desactivado por defecto)
+- **LLM Opcional**: Análisis de noticias y narrativa con proveedor configurable (OpenAI u Ollama local)
 
 ---
 
@@ -48,18 +48,19 @@ Pepline_fundamentals/
 │   ├── analysis/
 │   │   ├── fundamental_analysis.py  # Scoring por componente (5 dimensiones)
 │   │   ├── scoring.py               # Agregación ponderada → total_score
-│   │   └── llm_summary.py           # Narrativas OpenAI (opcional)
+│   │   └── llm_summary.py           # Narrativas LLM (OpenAI/Ollama)
 │   ├── models/
 │   │   └── ranking_model.py         # Ordenamiento y exportación
 │   ├── dashboard/
-│   │   ├── app.py                   # App Streamlit principal (4 tabs)
+│   │   ├── app.py                   # App Streamlit principal (5 tabs)
 │   │   ├── config.py                # Paleta de colores y pesos visuales
 │   │   ├── data_loader.py           # Carga con caché @st.cache_data
 │   │   ├── .streamlit/
 │   │   │   └── config.toml          # Tema oscuro
 │   │   └── components/
 │   │       ├── charts.py            # 6 gráficos Plotly reutilizables
-│   │       └── kpis.py              # 4 tarjetas métricas
+│   │       ├── kpis.py              # 4 tarjetas métricas
+│   │       └── news.py              # Noticias Top 20, impacto y alertas
 │   ├── utils/
 │   │   ├── logger.py                # Logging con rotación de archivos
 │   │   ├── helpers.py               # Funciones auxiliares (safe_float, clamp, etc.)
@@ -150,7 +151,7 @@ El dashboard se actualiza automáticamente con el último CSV generado por el pi
 
 ## Dashboard
 
-4 tabs con tema oscuro optimizado:
+5 tabs con tema oscuro optimizado:
 
 | Tab | Contenido |
 |-----|-----------|
@@ -158,6 +159,7 @@ El dashboard se actualiza automáticamente con el último CSV generado por el pi
 | **Fundamentales** | Scatter Crecimiento vs ROIC (burbuja = market cap), tabla top 15 márgenes |
 | **Riesgo y Valuación** | Matriz calidad vs riesgo (color = valuación), tabla top deuda/equity |
 | **Scoring** | Heatmap de componentes Top 20, gráfico de contribución ponderada |
+| **Noticias** | Noticias Top 20, sentimiento, catalizadores, impacto +1d/+5d, alertas y top movers |
 
 **Filtros globales en sidebar**: Sector · Clasificación · Origen (manual/descubierto) · Rango de score · Market cap
 
@@ -232,8 +234,14 @@ DISCOVERY_MAX_NEW_TICKERS=10
 
 # === LLM (opcional) ===
 ENABLE_LLM_SUMMARY=false
+LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=gemma4:e2b
+OLLAMA_TIMEOUT_SECONDS=120
+OLLAMA_MAX_HEADLINES_PER_TICKER=8
+OLLAMA_ENABLE_DASHBOARD_SUMMARY=true
 ```
 
 Ver [`project/.env.example`](project/.env.example) para referencia completa.
@@ -253,6 +261,23 @@ openai >= 1.45.0       # opcional
 finvizfinance >= 1.3.0  # opcional, para descubrimiento
 ```
 
+## Integracion Ollama Local
+
+1. Instalar y levantar Ollama en tu equipo.
+2. Descargar el modelo ligero recomendado:
+    - `ollama run gemma4:e2b`
+3. Configurar proveedor en `project/.env`:
+    - `ENABLE_LLM_SUMMARY=true`
+    - `LLM_PROVIDER=ollama`
+    - `OLLAMA_BASE_URL=http://localhost:11434`
+    - `OLLAMA_MODEL=gemma4:e2b`
+4. Ejecutar pipeline normalmente con `python main.py`.
+
+Flujo recomendado:
+- Pipeline diario para refrescar ranking y features.
+- Dashboard on-demand para revisar noticias Top 20 y alertas.
+- Si Ollama no esta disponible, el sistema debe degradar a fallback sin romper ejecucion.
+
 ### Dashboard (`dashboard/requirements-dashboard.txt`)
 ```
 streamlit >= 1.44.0
@@ -268,10 +293,11 @@ numpy >= 1.26.0
 | Problema | Solución |
 |---------|----------|
 | `ModuleNotFoundError: No module named 'dashboard'` | Ejecutar desde `project/`: `python -m streamlit run dashboard/app.py` |
+| `chmod +x update_all.sh` falla en PowerShell | Normal en Windows PowerShell. Ejecuta el script con Git Bash: `bash update_all.sh` |
 | `No data from yfinance for TICKER` | Verificar ticker en Yahoo Finance; el pipeline continúa sin él |
 | Dashboard vacío / sin datos | Ejecutar `python main.py` primero para generar los CSV |
 | Discovery no encuentra candidatos | Aumentar `DISCOVERY_MIN_SALES_GROWTH` o expandir `DISCOVERY_SECTORS` |
-| Import error `openai` | Normal si `ENABLE_LLM_SUMMARY=false`; el pipeline degrada graciosamente |
+| Ollama no responde | Verificar que `ollama serve` este activo y que el modelo exista en `ollama list` |
 
 ---
 
