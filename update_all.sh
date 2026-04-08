@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ajusta esta ruta si cambia tu carpeta
-ROOT_DIR="/c/Users/ekrde/OneDrive/ML2025/Pepline_fundamentals"
+# Detecta automáticamente la raíz del repositorio según la ubicación del script
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$ROOT_DIR/project"
 VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
 LOG_DIR="$ROOT_DIR/project/logs"

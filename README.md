@@ -152,7 +152,7 @@ El dashboard se actualiza automáticamente con el último CSV generado por el pi
 Se incluye script nativo para Windows en [update_all.ps1](update_all.ps1):
 
 ```powershell
-cd C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals
+cd <ruta-del-repo>
 powershell -ExecutionPolicy Bypass -File .\update_all.ps1
 ```
 
@@ -175,9 +175,9 @@ Automatizacion diaria con Task Scheduler:
 3. Action:
      - Program/script: `powershell.exe`
      - Add arguments:
-         `-ExecutionPolicy Bypass -File "C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals\update_all.ps1"`
+         `-ExecutionPolicy Bypass -File "<ruta-del-repo>\update_all.ps1"`
      - Start in:
-         `C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals`
+         `<ruta-del-repo>`
 4. General: activar **Run with highest privileges**.
 5. Validar logs en `project/logs/daily_update.log`.
 

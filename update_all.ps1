@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$RootDir = "C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals"
+$RootDir = $PSScriptRoot
 $ProjectDir = Join-Path $RootDir "project"
 $VenvPy = Join-Path $RootDir ".venv\Scripts\python.exe"
 $LogDir = Join-Path $ProjectDir "logs"
