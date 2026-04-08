@@ -10,6 +10,7 @@ $VenvPy = Join-Path $RootDir ".venv\Scripts\python.exe"
 $LogDir = Join-Path $ProjectDir "logs"
 $RunLog = Join-Path $LogDir "daily_update.log"
 $PipelineRunLog = Join-Path $LogDir "pipeline_last_run.log"
+$PipelineErrLog = Join-Path $LogDir "pipeline_last_run.err.log"
 $EnvFile = Join-Path $ProjectDir ".env"
 
 function Write-Log {
@@ -105,10 +106,32 @@ try {
         if (Test-Path $PipelineRunLog) {
             Remove-Item $PipelineRunLog -Force
         }
+        if (Test-Path $PipelineErrLog) {
+            Remove-Item $PipelineErrLog -Force
+        }
 
-        $pipelineOutput = & $VenvPy main.py 2>&1
-        $pipelineOutput | Tee-Object -FilePath $PipelineRunLog | Out-Null
-        $pipelineOutput | Out-File -FilePath $RunLog -Append -Encoding utf8
+        $startProcessArgs = @{
+            FilePath = $VenvPy
+            ArgumentList = "main.py"
+            WorkingDirectory = $ProjectDir
+            NoNewWindow = $true
+            Wait = $true
+            PassThru = $true
+            RedirectStandardOutput = $PipelineRunLog
+            RedirectStandardError = $PipelineErrLog
+        }
+        $proc = Start-Process @startProcessArgs
+
+        if (Test-Path $PipelineRunLog) {
+            Get-Content $PipelineRunLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+        }
+        if (Test-Path $PipelineErrLog) {
+            Get-Content $PipelineErrLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+        }
+
+        if ($proc.ExitCode -ne 0) {
+            throw "Pipeline terminó con código de salida $($proc.ExitCode)"
+        }
 
         Write-Log "[Data Quality] Validacion de tickers..."
         $invalidMatches = Select-String -Path $PipelineRunLog -Pattern "Quote not found for symbol: ([A-Z0-9.\-]+)" -AllMatches -ErrorAction SilentlyContinue
