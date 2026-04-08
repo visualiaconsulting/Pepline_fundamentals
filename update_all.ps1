@@ -1,5 +1,7 @@
 param(
-    [switch]$SkipPipeline
+    [switch]$SkipPipeline,
+    [switch]$OpenDashboard,
+    [int]$DashboardPort = 8500
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,6 +61,7 @@ try {
 
     $llmProvider = Get-EnvValue -Key "LLM_PROVIDER" -DefaultValue "openai"
     $ollamaBaseUrl = Get-EnvValue -Key "OLLAMA_BASE_URL" -DefaultValue "http://localhost:11434"
+    $ollamaApiKey = Get-EnvValue -Key "OLLAMA_API_KEY" -DefaultValue ""
     $ollamaModel = Get-EnvValue -Key "OLLAMA_MODEL" -DefaultValue "gemma4:e2b"
 
     Write-Log "[1/6] Git pull..."
@@ -76,7 +79,11 @@ try {
         Write-Log "LLM_PROVIDER=ollama detectado. Verificando endpoint y modelo..."
         try {
             $tagsUrl = "$($ollamaBaseUrl.TrimEnd('/'))/api/tags"
-            $response = Invoke-RestMethod -Uri $tagsUrl -Method Get -TimeoutSec 15
+            $headers = @{}
+            if (-not [string]::IsNullOrWhiteSpace($ollamaApiKey)) {
+                $headers["Authorization"] = "Bearer $ollamaApiKey"
+            }
+            $response = Invoke-RestMethod -Uri $tagsUrl -Method Get -TimeoutSec 15 -Headers $headers
             $models = @()
             if ($response.models) {
                 $models = $response.models | ForEach-Object { $_.name }
@@ -174,6 +181,23 @@ try {
     }
     else {
         throw "No se genero company_ranking.csv"
+    }
+
+    if ($OpenDashboard) {
+        Write-Log "[Extra] Iniciando dashboard Streamlit..."
+        $dashboardArgs = @(
+            "-m",
+            "streamlit",
+            "run",
+            "dashboard/app.py",
+            "--server.headless",
+            "true",
+            "--server.port",
+            "$DashboardPort"
+        )
+
+        Start-Process -FilePath $VenvPy -ArgumentList $dashboardArgs -WorkingDirectory $ProjectDir | Out-Null
+        Write-Log "Dashboard lanzado en http://localhost:$DashboardPort"
     }
 
     Write-Log "Fin de update_all.ps1"

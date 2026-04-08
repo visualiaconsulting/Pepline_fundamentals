@@ -7,6 +7,8 @@ from typing import Dict
 import pandas as pd
 import streamlit as st
 import yfinance as yf
+from analysis.llm_summary import LLMSummaryGenerator
+from config.settings import settings
 
 # ---------------------------------------------------------------------------
 # Keyword lists for rule-based sentiment classification
@@ -249,6 +251,79 @@ def _build_cross_ticker_news_frame(news_dict: Dict[str, pd.DataFrame]) -> pd.Dat
     return df_all
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _check_ollama_health_cached() -> tuple[bool, str]:
+    if settings.llm_provider != "ollama":
+        return False, "provider_no_ollama"
+    generator = LLMSummaryGenerator()
+    if generator.ollama_client is None:
+        return False, "ollama_client_unavailable"
+    return generator.ollama_client.health_check()
+
+
+def _render_ai_summary_panel(ticker: str, row: pd.Series, df_news: pd.DataFrame) -> None:
+    st.markdown("### Analisis IA")
+
+    existing_provider = str(row.get("llm_provider_used", "")).strip() or "N/A"
+    existing_status = str(row.get("llm_status", "")).strip() or "N/A"
+    fallback_reason = str(row.get("llm_fallback_reason", "")).strip()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Proveedor (pipeline)", existing_provider)
+    c2.metric("Estado (pipeline)", existing_status)
+    c3.metric("Proveedor configurado", settings.llm_provider)
+
+    if fallback_reason:
+        st.caption(f"Fallback pipeline: {fallback_reason}")
+
+    if settings.llm_provider == "ollama":
+        healthy, detail = _check_ollama_health_cached()
+        if healthy:
+            st.success(f"Ollama disponible en {settings.ollama_base_url} con modelo {settings.ollama_model}")
+        else:
+            st.warning(f"Ollama no disponible: {detail}")
+
+    pipeline_exec = str(row.get("executive_summary", "")).strip()
+    pipeline_thesis = str(row.get("investment_thesis", "")).strip()
+    pipeline_risks = str(row.get("key_risks", "")).strip()
+
+    if pipeline_exec or pipeline_thesis or pipeline_risks:
+        st.markdown("#### Resultado guardado en pipeline")
+        st.write(pipeline_exec or "Sin resumen ejecutivo")
+        st.markdown(f"**Tesis:** {pipeline_thesis or 'Sin tesis'}")
+        st.markdown(f"**Riesgos:** {pipeline_risks or 'Sin riesgos'}")
+    else:
+        st.info("No hay columnas IA pobladas en el CSV actual. Ejecuta de nuevo el pipeline.")
+
+    if not settings.ollama_enable_dashboard_summary:
+        return
+
+    session_key = f"ai_live_{ticker}"
+    if st.button(f"Recalcular analisis IA para {ticker}", key=f"btn_ai_{ticker}"):
+        generator = LLMSummaryGenerator()
+        headlines = (
+            df_news["title"].fillna("").astype(str).head(settings.ollama_max_headlines_per_ticker).tolist()
+            if not df_news.empty and "title" in df_news.columns
+            else []
+        )
+        with st.spinner("Generando analisis IA..."):
+            live = generator.generate_for_row(row, headlines)
+        st.session_state[session_key] = live
+
+    live_result = st.session_state.get(session_key)
+    if live_result:
+        st.markdown("#### Resultado IA on-demand")
+        st.caption(
+            f"Proveedor: {live_result.get('llm_provider_used', 'rule-based')} | "
+            f"Estado: {live_result.get('llm_status', 'fallback')}"
+        )
+        if live_result.get("llm_fallback_reason"):
+            st.caption(f"Motivo fallback: {live_result['llm_fallback_reason']}")
+        st.write(live_result.get("executive_summary", "Sin resumen"))
+        st.markdown(f"**Tesis:** {live_result.get('investment_thesis', 'Sin tesis')}")
+        st.markdown(f"**Riesgos:** {live_result.get('key_risks', 'Sin riesgos')}")
+
+
 def render_news_tab(filtered_df: pd.DataFrame) -> None:
     """Render the full Noticias tab content."""
 
@@ -390,6 +465,8 @@ def _render_ticker_news(ticker: str, filtered_df: pd.DataFrame, news_dict: dict)
         catalyst_counts = df_news["catalyst"].value_counts().head(5)
         st.caption("Catalizadores principales")
         st.bar_chart(catalyst_counts)
+
+    _render_ai_summary_panel(ticker=ticker, row=row.iloc[0], df_news=df_news)
 
     st.divider()
     _render_news_table(ticker, df_news)

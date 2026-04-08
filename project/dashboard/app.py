@@ -21,6 +21,7 @@ from dashboard.components.kpis import render_kpis
 from dashboard.components.news import render_news_tab
 from dashboard.config import CLASSIFICATION_ORDER
 from dashboard.data_loader import apply_filters, load_data
+from config.settings import settings
 
 
 st.set_page_config(
@@ -118,6 +119,10 @@ with tab4:
     c2.plotly_chart(weighted_contribution(filtered_df), use_container_width=True)
 
 with tab5:
+    st.caption(
+        f"IA configurada: provider={settings.llm_provider} | "
+        f"enabled={settings.enable_llm_summary} | modelo_ollama={settings.ollama_model}"
+    )
     render_news_tab(filtered_df)
 
 st.divider()

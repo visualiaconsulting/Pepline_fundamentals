@@ -140,10 +140,10 @@ python main.py
 
 ```bash
 cd project
-python -m streamlit run dashboard/app.py
+python -m streamlit run dashboard/app.py --server.port 8500
 ```
 
-Acceso: **http://localhost:8501**
+Acceso: **http://localhost:8500**
 
 El dashboard se actualiza automáticamente con el último CSV generado por el pipeline.
 
@@ -160,6 +160,12 @@ Opcional para validar sin correr pipeline completo:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -SkipPipeline
+```
+
+Opcional para abrir dashboard automaticamente al finalizar:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -OpenDashboard -DashboardPort 8500
 ```
 
 Automatizacion diaria con Task Scheduler:
@@ -266,6 +272,7 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_API_KEY=
 OLLAMA_MODEL=gemma4:e2b
 OLLAMA_TIMEOUT_SECONDS=120
 OLLAMA_MAX_HEADLINES_PER_TICKER=8
@@ -298,6 +305,7 @@ finvizfinance >= 1.3.0  # opcional, para descubrimiento
     - `ENABLE_LLM_SUMMARY=true`
     - `LLM_PROVIDER=ollama`
     - `OLLAMA_BASE_URL=http://localhost:11434`
+    - `OLLAMA_API_KEY=` (solo para cloud)
     - `OLLAMA_MODEL=gemma4:e2b`
 4. Ejecutar pipeline normalmente con `python main.py`.
 
@@ -305,6 +313,27 @@ Flujo recomendado:
 - Pipeline diario para refrescar ranking y features.
 - Dashboard on-demand para revisar noticias Top 20 y alertas.
 - Si Ollama no esta disponible, el sistema debe degradar a fallback sin romper ejecucion.
+
+## Integracion Ollama Cloud (API key)
+
+Para desplegar en servidor sin depender de GPU/RAM local:
+
+1. Configura en `project/.env`:
+    - `ENABLE_LLM_SUMMARY=true`
+    - `LLM_PROVIDER=ollama`
+    - `OLLAMA_BASE_URL=http://localhost:11434`
+    - `OLLAMA_API_KEY=<tu_api_key_cloud>`
+    - `OLLAMA_MODEL=minimax-m2.7:cloud`
+    - `OLLAMA_MAX_HEADLINES_PER_TICKER=3`
+2. Ejecuta `python main.py`.
+3. Verifica trazabilidad en `data/company_ranking.csv` con columnas:
+    - `llm_provider_used`
+    - `llm_status`
+    - `llm_fallback_reason`
+
+Seguridad:
+- Nunca subas `project/.env` al repositorio.
+- Si una key se expone, rotala de inmediato.
 
 ### Dashboard (`dashboard/requirements-dashboard.txt`)
 ```
@@ -327,6 +356,7 @@ numpy >= 1.26.0
 | Dashboard vacío / sin datos | Ejecutar `python main.py` primero para generar los CSV |
 | Discovery no encuentra candidatos | Aumentar `DISCOVERY_MIN_SALES_GROWTH` o expandir `DISCOVERY_SECTORS` |
 | Ollama no responde | Verificar que `ollama serve` este activo y que el modelo exista en `ollama list` |
+| Ollama cloud devuelve 401/403 | Verificar `OLLAMA_API_KEY` en `project/.env` y rotar key si fue revocada |
 
 ---
 

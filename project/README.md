@@ -39,9 +39,14 @@ Variables clave:
 - `OPENAI_API_KEY`: solo si usas OpenAI
 - `OPENAI_MODEL`: modelo OpenAI
 - `OLLAMA_BASE_URL`: endpoint local/remoto de Ollama
+- `OLLAMA_API_KEY`: token para Ollama cloud (vacío en local)
 - `OLLAMA_MODEL`: modelo Ollama (ejemplo: `gemma4:e2b`)
 - `OLLAMA_TIMEOUT_SECONDS`: timeout por request al modelo
 - `OLLAMA_MAX_HEADLINES_PER_TICKER`: limite de titulares por ticker para analisis
+
+Recomendado para cloud con bajo consumo:
+- `OLLAMA_MODEL=minimax-m2.7:cloud`
+- `OLLAMA_MAX_HEADLINES_PER_TICKER=3`
 
 ### Modo Híbrido: Portafolio Preferido + Nuevas Oportunidades
 
@@ -100,7 +105,7 @@ pip install -r dashboard/requirements-dashboard.txt
 ### Ejecucion dashboard
 
 ```bash
-streamlit run dashboard/app.py
+streamlit run dashboard/app.py --server.port 8500
 ```
 
 Al ejecutar una nueva corrida de `python main.py`, el dashboard refleja automaticamente los nuevos resultados del pipeline.
@@ -129,9 +134,10 @@ Se generan automáticamente:
 1. Actualiza codigo: `git pull origin main`
 2. Verifica dependencias: `pip install -r requirements.txt`
 3. Si usaras Ollama, confirma servicio y modelo (`ollama list`)
-4. Ejecuta pipeline: `python main.py`
-5. Abre dashboard: `python -m streamlit run dashboard/app.py`
-6. En tab Noticias, pulsa actualizar para refrescar feed y analisis
+4. Si usaras cloud, confirma que `OLLAMA_API_KEY` este cargada en `.env`
+5. Ejecuta pipeline: `python main.py`
+6. Abre dashboard: `python -m streamlit run dashboard/app.py --server.port 8500`
+7. En tab Noticias, pulsa actualizar para refrescar feed y analisis
 
 ### Ejecucion diaria automatizada (Windows)
 
@@ -139,6 +145,12 @@ Desde la raiz del repo:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\update_all.ps1
+```
+
+Si quieres ejecutar update y abrir dashboard automaticamente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -OpenDashboard -DashboardPort 8500
 ```
 
 Este script actualiza codigo, dependencias, valida Ollama (si `LLM_PROVIDER=ollama`) y ejecuta el pipeline.

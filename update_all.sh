@@ -47,6 +47,7 @@ mkdir -p "$LOG_DIR"
 
   LLM_PROVIDER=$(read_env "LLM_PROVIDER" "openai")
   OLLAMA_BASE_URL=$(read_env "OLLAMA_BASE_URL" "http://localhost:11434")
+  OLLAMA_API_KEY=$(read_env "OLLAMA_API_KEY" "")
   OLLAMA_MODEL=$(read_env "OLLAMA_MODEL" "gemma4:e2b")
 
   echo "[1/6] Git pull..."
@@ -62,7 +63,11 @@ mkdir -p "$LOG_DIR"
   echo "[4/6] Preflight Ollama (si aplica)..."
   if [ "$LLM_PROVIDER" = "ollama" ]; then
     echo "LLM_PROVIDER=ollama detectado. Verificando endpoint y modelo..."
-    if curl -fsS "$OLLAMA_BASE_URL/api/tags" > /tmp/ollama_tags.json 2>/dev/null; then
+    CURL_AUTH_ARGS=()
+    if [ -n "$OLLAMA_API_KEY" ]; then
+      CURL_AUTH_ARGS=(-H "Authorization: Bearer $OLLAMA_API_KEY")
+    fi
+    if curl -fsS "${CURL_AUTH_ARGS[@]}" "$OLLAMA_BASE_URL/api/tags" > /tmp/ollama_tags.json 2>/dev/null; then
       if grep -qi "$OLLAMA_MODEL" /tmp/ollama_tags.json; then
         echo "OK: Modelo Ollama encontrado ($OLLAMA_MODEL)."
       else

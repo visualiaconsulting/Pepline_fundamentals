@@ -81,11 +81,20 @@ class Settings:
     )
 
     enable_llm_summary: bool = _get_bool("ENABLE_LLM_SUMMARY")
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai").strip().lower()
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip().rstrip("/")
+    ollama_api_key: str = os.getenv("OLLAMA_API_KEY", "").strip()
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "gemma4:e2b").strip()
+    ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+    ollama_max_headlines_per_ticker: int = int(os.getenv("OLLAMA_MAX_HEADLINES_PER_TICKER", "8"))
+    ollama_enable_dashboard_summary: bool = _get_bool("OLLAMA_ENABLE_DASHBOARD_SUMMARY", "true")
 
     def __post_init__(self) -> None:
         self.universe_tickers = list(self.manual_universe_tickers)
+        if self.llm_provider not in {"openai", "ollama", "rule-based", "rule_based"}:
+            self.llm_provider = "openai"
 
 
 settings = Settings()

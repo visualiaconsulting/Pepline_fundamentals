@@ -44,6 +44,12 @@ def load_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     ranking_df["sector"] = ranking_df.get("sector", "N/A").fillna("N/A")
     ranking_df["classification"] = ranking_df.get("classification", "Neutral").fillna("Neutral")
     ranking_df["ticker_origin"] = ranking_df.get("ticker_origin", "manual").fillna("manual")
+    ranking_df["investment_thesis"] = ranking_df.get("investment_thesis", "").fillna("")
+    ranking_df["key_risks"] = ranking_df.get("key_risks", "").fillna("")
+    ranking_df["executive_summary"] = ranking_df.get("executive_summary", "").fillna("")
+    ranking_df["llm_provider_used"] = ranking_df.get("llm_provider_used", "").fillna("")
+    ranking_df["llm_status"] = ranking_df.get("llm_status", "").fillna("")
+    ranking_df["llm_fallback_reason"] = ranking_df.get("llm_fallback_reason", "").fillna("")
 
     ranking_df = ranking_df.sort_values("rank", ascending=True).reset_index(drop=True)
 

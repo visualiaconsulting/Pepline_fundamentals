@@ -66,6 +66,9 @@ class RankingModel:
                 f"Investment Thesis: {row.get('investment_thesis', '')}\n"
                 f"Key Risks: {row.get('key_risks', '')}\n"
                 f"Executive Summary: {row.get('executive_summary', '')}\n"
+                f"LLM Provider Used: {row.get('llm_provider_used', '')}\n"
+                f"LLM Status: {row.get('llm_status', '')}\n"
+                f"LLM Fallback Reason: {row.get('llm_fallback_reason', '')}\n"
                 f"Titular clave: {headline}\n"
             )
 
