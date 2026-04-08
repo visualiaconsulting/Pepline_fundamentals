@@ -7,6 +7,7 @@ PROJECT_DIR="$ROOT_DIR/project"
 VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
 LOG_DIR="$ROOT_DIR/project/logs"
 RUN_LOG="$LOG_DIR/daily_update.log"
+PIPELINE_RUN_LOG="$LOG_DIR/pipeline_last_run.log"
 ENV_FILE="$PROJECT_DIR/.env"
 
 read_env() {
@@ -78,7 +79,23 @@ mkdir -p "$LOG_DIR"
 
   echo "[5/6] Ejecutar pipeline..."
   cd "$PROJECT_DIR"
-  "$VENV_PY" main.py
+  "$VENV_PY" main.py 2>&1 | tee "$PIPELINE_RUN_LOG"
+
+  echo "[Data Quality] Validación de tickers..."
+  invalid_tickers=$(grep -Eo "Quote not found for symbol: [A-Z0-9.\-]+" "$PIPELINE_RUN_LOG" | sed "s/.*: //" | sort -u | tr '\n' ',' | sed 's/,$//' || true)
+  incomplete_tickers=$(grep -Eo "Incomplete financial statements for [A-Z0-9.\-]+" "$PIPELINE_RUN_LOG" | sed "s/.* for //" | sort -u | tr '\n' ',' | sed 's/,$//' || true)
+
+  if [ -n "$invalid_tickers" ]; then
+    echo "WARNING: Tickers inválidos detectados: $invalid_tickers"
+  else
+    echo "OK: No se detectaron tickers inválidos."
+  fi
+
+  if [ -n "$incomplete_tickers" ]; then
+    echo "WARNING: Tickers con estados financieros incompletos: $incomplete_tickers"
+  else
+    echo "OK: No se detectaron estados financieros incompletos."
+  fi
 
   echo "[6/6] Verificación rápida de salida..."
   if [ -f "$PROJECT_DIR/data/company_ranking.csv" ]; then

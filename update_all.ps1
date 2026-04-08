@@ -9,6 +9,7 @@ $ProjectDir = Join-Path $RootDir "project"
 $VenvPy = Join-Path $RootDir ".venv\Scripts\python.exe"
 $LogDir = Join-Path $ProjectDir "logs"
 $RunLog = Join-Path $LogDir "daily_update.log"
+$PipelineRunLog = Join-Path $LogDir "pipeline_last_run.log"
 $EnvFile = Join-Path $ProjectDir ".env"
 
 function Write-Log {
@@ -101,7 +102,46 @@ try {
     }
     else {
         Set-Location $ProjectDir
-        & $VenvPy main.py
+        if (Test-Path $PipelineRunLog) {
+            Remove-Item $PipelineRunLog -Force
+        }
+
+        $pipelineOutput = & $VenvPy main.py 2>&1
+        $pipelineOutput | Tee-Object -FilePath $PipelineRunLog | Out-Null
+        $pipelineOutput | Out-File -FilePath $RunLog -Append -Encoding utf8
+
+        Write-Log "[Data Quality] Validacion de tickers..."
+        $invalidMatches = Select-String -Path $PipelineRunLog -Pattern "Quote not found for symbol: ([A-Z0-9.\-]+)" -AllMatches -ErrorAction SilentlyContinue
+        $invalidTickers = @()
+        foreach ($m in $invalidMatches) {
+            foreach ($g in $m.Matches) {
+                $invalidTickers += $g.Groups[1].Value
+            }
+        }
+        $invalidTickers = $invalidTickers | Sort-Object -Unique
+
+        $incompleteMatches = Select-String -Path $PipelineRunLog -Pattern "Incomplete financial statements for ([A-Z0-9.\-]+)" -AllMatches -ErrorAction SilentlyContinue
+        $incompleteTickers = @()
+        foreach ($m in $incompleteMatches) {
+            foreach ($g in $m.Matches) {
+                $incompleteTickers += $g.Groups[1].Value
+            }
+        }
+        $incompleteTickers = $incompleteTickers | Sort-Object -Unique
+
+        if ($invalidTickers.Count -gt 0) {
+            Write-Log ("WARNING: Tickers invalidos detectados: " + ($invalidTickers -join ","))
+        }
+        else {
+            Write-Log "OK: No se detectaron tickers invalidos."
+        }
+
+        if ($incompleteTickers.Count -gt 0) {
+            Write-Log ("WARNING: Tickers con estados financieros incompletos: " + ($incompleteTickers -join ","))
+        }
+        else {
+            Write-Log "OK: No se detectaron estados financieros incompletos."
+        }
     }
 
     Write-Log "[6/6] Verificacion de salida..."
