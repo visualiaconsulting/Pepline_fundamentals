@@ -147,6 +147,34 @@ Acceso: **http://localhost:8501**
 
 El dashboard se actualiza automáticamente con el último CSV generado por el pipeline.
 
+### Actualizacion automatica (Windows PowerShell)
+
+Se incluye script nativo para Windows en [update_all.ps1](update_all.ps1):
+
+```powershell
+cd C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1
+```
+
+Opcional para validar sin correr pipeline completo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -SkipPipeline
+```
+
+Automatizacion diaria con Task Scheduler:
+
+1. Abrir **Task Scheduler** -> **Create Task**.
+2. Trigger: **Daily** (ej. 08:00) y activar "Run task as soon as possible after a scheduled start is missed".
+3. Action:
+     - Program/script: `powershell.exe`
+     - Add arguments:
+         `-ExecutionPolicy Bypass -File "C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals\update_all.ps1"`
+     - Start in:
+         `C:\Users\ekrde\OneDrive\ML2025\Pepline_fundamentals`
+4. General: activar **Run with highest privileges**.
+5. Validar logs en `project/logs/daily_update.log`.
+
 ---
 
 ## Dashboard
@@ -294,6 +322,7 @@ numpy >= 1.26.0
 |---------|----------|
 | `ModuleNotFoundError: No module named 'dashboard'` | Ejecutar desde `project/`: `python -m streamlit run dashboard/app.py` |
 | `chmod +x update_all.sh` falla en PowerShell | Normal en Windows PowerShell. Ejecuta el script con Git Bash: `bash update_all.sh` |
+| Quiero automatizar en Windows sin Git Bash | Usa `update_all.ps1` con Task Scheduler |
 | `No data from yfinance for TICKER` | Verificar ticker en Yahoo Finance; el pipeline continúa sin él |
 | Dashboard vacío / sin datos | Ejecutar `python main.py` primero para generar los CSV |
 | Discovery no encuentra candidatos | Aumentar `DISCOVERY_MIN_SALES_GROWTH` o expandir `DISCOVERY_SECTORS` |

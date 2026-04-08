@@ -132,3 +132,13 @@ Se generan automáticamente:
 4. Ejecuta pipeline: `python main.py`
 5. Abre dashboard: `python -m streamlit run dashboard/app.py`
 6. En tab Noticias, pulsa actualizar para refrescar feed y analisis
+
+### Ejecucion diaria automatizada (Windows)
+
+Desde la raiz del repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1
+```
+
+Este script actualiza codigo, dependencias, valida Ollama (si `LLM_PROVIDER=ollama`) y ejecuta el pipeline.
