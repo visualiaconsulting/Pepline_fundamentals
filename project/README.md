@@ -43,6 +43,15 @@ Variables clave:
 - `OLLAMA_MODEL`: modelo Ollama (ejemplo: `gemma4:e2b`)
 - `OLLAMA_TIMEOUT_SECONDS`: timeout por request al modelo
 - `OLLAMA_MAX_HEADLINES_PER_TICKER`: limite de titulares por ticker para analisis
+- `OLLAMA_BATCH_TOP_N`: cuantas empresas reciben análisis Ollama completo por corrida
+- `EMAIL_REPORT_ENABLED`: activa digest en texto plano por correo al terminar `update_all`
+- `EMAIL_REPORT_TOP_N`: cantidad de empresas incluidas en el digest
+- `EMAIL_REPORT_NEWS_PER_TICKER`: numero de noticias con link por empresa en el digest
+- `EMAIL_REPORT_FROM`: remitente visible del correo
+- `EMAIL_REPORT_TO`: destinatarios separados por coma
+- `SMTP_HOST` / `SMTP_PORT`: servidor SMTP
+- `SMTP_USER` / `SMTP_PASS`: credenciales SMTP
+- `SMTP_USE_TLS`: activa STARTTLS para el envio
 
 Recomendado para cloud con bajo consumo:
 - `OLLAMA_MODEL=minimax-m2.7:cloud`
@@ -110,13 +119,35 @@ streamlit run dashboard/app.py --server.port 8500
 
 Al ejecutar una nueva corrida de `python main.py`, el dashboard refleja automaticamente los nuevos resultados del pipeline.
 
+### Exportacion de documento desde Dashboard (IA Reports)
+
+En el tab IA Reports, bloque **Documento diario**:
+
+- Puedes elegir `Top 2`, `Top 5`, `Top 10` o `Top 20` para el documento.
+- El nombre descargado se genera con fecha US al final (`MMDDYYYY`).
+- Puedes guardar snapshot local (`.md` y `.txt`) indicando una carpeta exacta.
+
+Formato de nombres:
+
+- `dashboard_top{N}_{MMDDYYYY}.md`
+- `dashboard_top{N}_{MMDDYYYY}.txt`
+
+Ejemplo:
+
+- `dashboard_top2_04102026.txt`
+
+Nota: la descarga del navegador depende de la carpeta de descargas configurada en el navegador/SO. Para una ruta totalmente controlada, usa el boton de snapshot local.
+
 ## 4) Outputs
 
 Se generan automáticamente:
 - `data/company_ranking.csv`
 - `data/top10_opportunities.csv`
+- `data/top20_opportunities.csv`
+- `data/top20_news.csv`
 - `data/discovery_log.csv` (si discovery está activado)
 - `data/reports/{TICKER}_report.txt`
+- `data/reports/daily_email_digest.txt` (si el digest se construye)
 - logs en `logs/pipeline.log`
 
 ## 5) Flujo del Pipeline
@@ -154,3 +185,4 @@ powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -OpenDashboard -Dashbo
 ```
 
 Este script actualiza codigo, dependencias, valida Ollama (si `LLM_PROVIDER=ollama`) y ejecuta el pipeline.
+Si `EMAIL_REPORT_ENABLED=true`, al final intenta enviar un digest en texto plano con las primeras empresas, los resultados de IA y links de noticias.

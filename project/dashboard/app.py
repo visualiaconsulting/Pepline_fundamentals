@@ -17,6 +17,7 @@ from dashboard.components.charts import (
     sector_treemap,
     weighted_contribution,
 )
+from dashboard.components.ai_reports import render_ai_reports_tab
 from dashboard.components.kpis import render_kpis
 from dashboard.components.news import render_news_tab
 from dashboard.config import CLASSIFICATION_ORDER
@@ -74,8 +75,15 @@ filtered_df = apply_filters(
 
 render_kpis(filtered_df)
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Resumen Ejecutivo", "Fundamentales", "Riesgo y Valuacion", "Scoring", "📰 Noticias"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [
+        "Resumen Ejecutivo",
+        "Fundamentales",
+        "Riesgo y Valuacion",
+        "Scoring",
+        "📰 Noticias",
+        "🤖 Informes IA Top 20",
+    ]
 )
 
 with tab1:
@@ -124,6 +132,9 @@ with tab5:
         f"enabled={settings.enable_llm_summary} | modelo_ollama={settings.ollama_model}"
     )
     render_news_tab(filtered_df)
+
+with tab6:
+    render_ai_reports_tab(filtered_df)
 
 st.divider()
 st.subheader("Top 10 Oficial del Pipeline")

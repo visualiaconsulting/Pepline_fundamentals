@@ -37,7 +37,7 @@ class LLMSummaryGenerator:
             self.openai_client = self._build_openai_client()
         if settings.enable_llm_summary and self.provider == "ollama" and self.ollama_client is not None:
             self.ollama_health = self.ollama_client.health_check()
-        self.batch_top_n = 10
+        self.batch_top_n = settings.ollama_batch_top_n
 
     def _build_openai_client(self):
         try:
@@ -82,9 +82,16 @@ class LLMSummaryGenerator:
         )
 
         return {
+            "business_overview": (
+                f"{row.get('company_name', row.get('ticker', 'La compania'))} opera en {row.get('sector', 'su sector')} "
+                f"y participa principalmente en {row.get('industry', 'su industria')}."
+            ),
             "investment_thesis": thesis,
             "key_risks": risks,
             "executive_summary": executive,
+            "near_term_outlook": "Sin senal concluyente de muy corto plazo; conviene seguir noticias y proximos resultados."
+            if classification == "Neutral"
+            else "El sesgo cercano depende de si las noticias recientes confirman la fortaleza operativa observada."
         }
 
     @staticmethod
@@ -98,10 +105,13 @@ class LLMSummaryGenerator:
         try:
             prompt = (
                 "Eres un analista fundamental buy-side senior.\n"
-                "Genera respuesta JSON compacta con campos: investment_thesis, key_risks, executive_summary.\n"
+                "Responde SIEMPRE en espanol.\n"
+                "Genera respuesta JSON compacta con campos: business_overview, investment_thesis, key_risks, executive_summary, near_term_outlook.\n"
                 "No uses markdown.\n"
                 f"Ticker: {row.get('ticker')}\n"
+                f"Empresa: {row.get('company_name', '')}\n"
                 f"Sector: {row.get('sector')}\n"
+                f"Negocio: {row.get('business_summary', '')}\n"
                 f"Revenue Growth YoY: {self._safe_float(row, 'revenue_growth_yoy'):.2f}\n"
                 f"ROIC: {self._safe_float(row, 'roic'):.2f}\n"
                 f"Debt/Equity: {self._safe_float(row, 'debt_to_equity'):.2f}\n"
@@ -109,7 +119,9 @@ class LLMSummaryGenerator:
                 f"Net Margin: {self._safe_float(row, 'net_margin'):.2f}\n"
                 f"FCF: {self._safe_float(row, 'free_cash_flow'):.2f}\n"
                 f"Clasificacion: {row.get('classification')}\n"
-                f"Noticias: {' | '.join(headlines[:5]) if headlines else 'Sin noticias'}"
+                f"Noticias: {' | '.join(headlines[:5]) if headlines else 'Sin noticias'}\n"
+                "business_overview debe explicar en 1 o 2 frases que hace la empresa y de donde viene su negocio principal.\n"
+                "near_term_outlook debe describir el posible comportamiento de corto plazo sin inventar precios ni catalysts no observados."
             )
 
             response = self.openai_client.responses.create(
@@ -141,17 +153,21 @@ class LLMSummaryGenerator:
             loaded = json.loads(text)
             if isinstance(loaded, dict):
                 return {
+                    "business_overview": str(loaded.get("business_overview", "")),
                     "investment_thesis": str(loaded.get("investment_thesis", "")),
                     "key_risks": str(loaded.get("key_risks", "")),
                     "executive_summary": str(loaded.get("executive_summary", "")),
+                    "near_term_outlook": str(loaded.get("near_term_outlook", "")),
                 }
         except json.JSONDecodeError:
             pass
 
         return {
+            "business_overview": text[:220],
             "investment_thesis": text,
             "key_risks": "Ver narrativa LLM",
             "executive_summary": text[:350],
+            "near_term_outlook": "No se pudo estructurar outlook de corto plazo desde la respuesta del modelo.",
         }
 
     def _ollama_narrative(self, row: pd.Series, headlines: List[str]) -> Dict[str, str]:
@@ -169,6 +185,8 @@ class LLMSummaryGenerator:
                 ticker=str(row.get("ticker", "")),
                 headlines=headlines,
                 facts={
+                    "company_name": row.get("company_name", ""),
+                    "business_summary": row.get("business_summary", ""),
                     "classification": row.get("classification", "Neutral"),
                     "revenue_growth_yoy": self._safe_float(row, "revenue_growth_yoy"),
                     "roic": self._safe_float(row, "roic"),
@@ -178,7 +196,13 @@ class LLMSummaryGenerator:
                     "free_cash_flow": self._safe_float(row, "free_cash_flow"),
                 },
             )
-            if not parsed.get("executive_summary"):
+            if (
+                not parsed.get("business_overview")
+                or not parsed.get("investment_thesis")
+                or not parsed.get("key_risks")
+                or not parsed.get("executive_summary")
+                or not parsed.get("near_term_outlook")
+            ):
                 return self._fallback_narrative(row, "ollama_empty_response")
             parsed["llm_provider_used"] = "ollama"
             parsed["llm_status"] = "ok"
@@ -213,6 +237,8 @@ class LLMSummaryGenerator:
         investment_thesis = []
         key_risks = []
         executive_summary = []
+        business_overview = []
+        near_term_outlook = []
         llm_provider_used = []
         llm_status = []
         llm_fallback_reason = []
@@ -229,16 +255,20 @@ class LLMSummaryGenerator:
                 narrative = self._fallback_narrative(row, "ollama_batch_scope_top10")
             else:
                 narrative = self.generate_for_row(row, headlines)
+            business_overview.append(narrative["business_overview"])
             investment_thesis.append(narrative["investment_thesis"])
             key_risks.append(narrative["key_risks"])
             executive_summary.append(narrative["executive_summary"])
+            near_term_outlook.append(narrative["near_term_outlook"])
             llm_provider_used.append(narrative.get("llm_provider_used", "rule-based"))
             llm_status.append(narrative.get("llm_status", "fallback"))
             llm_fallback_reason.append(narrative.get("llm_fallback_reason", ""))
 
+        enriched["business_overview"] = business_overview
         enriched["investment_thesis"] = investment_thesis
         enriched["key_risks"] = key_risks
         enriched["executive_summary"] = executive_summary
+        enriched["near_term_outlook"] = near_term_outlook
         enriched["llm_provider_used"] = llm_provider_used
         enriched["llm_status"] = llm_status
         enriched["llm_fallback_reason"] = llm_fallback_reason

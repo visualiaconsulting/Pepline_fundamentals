@@ -13,6 +13,8 @@ $LogDir = Join-Path $ProjectDir "logs"
 $RunLog = Join-Path $LogDir "daily_update.log"
 $PipelineRunLog = Join-Path $LogDir "pipeline_last_run.log"
 $PipelineErrLog = Join-Path $LogDir "pipeline_last_run.err.log"
+$EmailRunLog = Join-Path $LogDir "email_digest_last_run.log"
+$EmailErrLog = Join-Path $LogDir "email_digest_last_run.err.log"
 $EnvFile = Join-Path $ProjectDir ".env"
 
 function Write-Log {
@@ -63,6 +65,7 @@ try {
     $ollamaBaseUrl = Get-EnvValue -Key "OLLAMA_BASE_URL" -DefaultValue "http://localhost:11434"
     $ollamaApiKey = Get-EnvValue -Key "OLLAMA_API_KEY" -DefaultValue ""
     $ollamaModel = Get-EnvValue -Key "OLLAMA_MODEL" -DefaultValue "gemma4:e2b"
+    $emailReportEnabled = (Get-EnvValue -Key "EMAIL_REPORT_ENABLED" -DefaultValue "false").ToLower()
 
     Write-Log "[1/6] Git pull..."
     git checkout main | Out-Null
@@ -198,6 +201,49 @@ try {
 
         Start-Process -FilePath $VenvPy -ArgumentList $dashboardArgs -WorkingDirectory $ProjectDir | Out-Null
         Write-Log "Dashboard lanzado en http://localhost:$DashboardPort"
+    }
+
+    if ($emailReportEnabled -eq "true") {
+        Write-Log "[Extra] Enviando digest por correo..."
+        try {
+            Set-Location $ProjectDir
+
+            if (Test-Path $EmailRunLog) {
+                Remove-Item $EmailRunLog -Force
+            }
+            if (Test-Path $EmailErrLog) {
+                Remove-Item $EmailErrLog -Force
+            }
+
+            $emailProcessArgs = @{
+                FilePath = $VenvPy
+                ArgumentList = "-m reporting.email_digest"
+                WorkingDirectory = $ProjectDir
+                NoNewWindow = $true
+                Wait = $true
+                PassThru = $true
+                RedirectStandardOutput = $EmailRunLog
+                RedirectStandardError = $EmailErrLog
+            }
+            $emailProc = Start-Process @emailProcessArgs
+
+            if (Test-Path $EmailRunLog) {
+                Get-Content $EmailRunLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+            }
+            if (Test-Path $EmailErrLog) {
+                Get-Content $EmailErrLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+            }
+
+            if ($emailProc.ExitCode -ne 0) {
+                Write-Log "WARNING: El digest de correo terminó con código $($emailProc.ExitCode). Revisa $EmailErrLog"
+            }
+            else {
+                Write-Log "OK: Digest de correo enviado o gestionado correctamente."
+            }
+        }
+        catch {
+            Write-Log "WARNING: No se pudo enviar el digest por correo: $($_.Exception.Message). Revisa $EmailErrLog"
+        }
     }
 
     Write-Log "Fin de update_all.ps1"

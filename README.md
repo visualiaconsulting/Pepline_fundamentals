@@ -11,7 +11,7 @@
 
 ## ¿Qué hace este proyecto?
 
-1. **Descarga datos financieros** de hasta 65+ empresas vía yfinance (ingresos, márgenes, ROIC, deuda, FCF, valuación)
+1. **Descarga datos financieros** de hasta 65+ empresas vía yfinance (ingresos, márgenes, ROIC, deuda, FCF, valuación, exchange, precios y target de consenso cuando existe)
 2. **Calcula 14+ métricas** y aplica un scoring de 5 componentes ponderados
 3. **Rankea** las empresas de mejor a peor oportunidad con clasificación (Excelente / Buena / Neutral / Riesgosa)
 4. **Descubre nuevas oportunidades** automáticamente vía screener Finviz (opcional)
@@ -28,6 +28,7 @@
 - **100% Configurable**: Todos los parámetros en `.env` — sin hardcoding
 - **Auditería Completa**: `discovery_log.csv` y `pipeline.log` para trazabilidad total
 - **LLM Opcional**: Análisis de noticias y narrativa con proveedor configurable (OpenAI u Ollama local)
+- **Informe Enriquecido por Ticker**: Cada reporte individual incluye ficha de empresa, fecha de elaboración, cierre previo con fecha, lectura de noticias y target de consenso cuando el dato existe
 
 ---
 
@@ -130,11 +131,64 @@ python main.py
 **Salidas generadas**:
 | Archivo | Descripción |
 |---------|-------------|
-| `data/company_ranking.csv` | Ranking completo (65 tickers × 32 columnas) |
+| `data/company_ranking.csv` | Ranking completo con métricas, metadatos de mercado y columnas narrativas enriquecidas |
 | `data/top10_opportunities.csv` | Top 10 filtrado |
-| `data/reports/{TICKER}_report.txt` | Reporte individual por empresa |
+| `data/reports/{TICKER}_report.txt` | Reporte individual por empresa con 6 secciones, fecha de elaboración y contexto de mercado |
 | `data/discovery_log.csv` | Auditoría del proceso de descubrimiento |
 | `logs/pipeline.log` | Log detallado de ejecución |
+
+### Formato del Informe por Ticker
+
+Cada archivo `data/reports/{TICKER}_report.txt` se genera en español y ahora contiene estas secciones:
+
+1. **Identificación**: ticker, nombre de empresa, exchange, sector/industria, rank, score, clasificación y fecha de elaboración.
+2. **Negocio**: descripción breve de la empresa y lectura resumida del negocio.
+3. **Mercado y Valuación**: precio actual de referencia, cierre previo con fecha, precio objetivo de consenso, cantidad de analistas, market cap, múltiplos y moneda.
+4. **Fundamentales**: crecimiento YoY, ROIC, márgenes, deuda/capital, free cash flow, flag de alto potencial y tesis preliminar.
+5. **Lectura de Noticias**: titular principal, outlook próximo y hasta `EMAIL_REPORT_NEWS_PER_TICKER` noticias con fuente, fecha y link.
+6. **Resumen AI**: tesis de inversión, riesgos clave y estado del proveedor LLM.
+
+### Columnas Nuevas en `company_ranking.csv`
+
+El ranking consolidado ahora incluye, además de las métricas previas, estas columnas nuevas:
+
+- `company_name`
+- `business_summary`
+- `exchange`
+- `previous_close`
+- `previous_close_date`
+- `current_price`
+- `target_price`
+- `analyst_count`
+- `business_overview`
+- `near_term_outlook`
+
+Notas:
+
+- `previous_close_date` usa formato `YYYY-MM-DD`.
+- `target_price` y `analyst_count` pueden quedar como `N/D` en el informe final si Yahoo Finance no ofrece cobertura para ese ticker.
+- `business_summary` proviene del diccionario `info` de yfinance y puede ser más extenso que la versión compacta mostrada en el `.txt`.
+
+### Reglas de Formato y Fallback
+
+- El informe usa `N/D` para campos faltantes en lugar de `0` o cadenas vacías.
+- Valores monetarios se muestran con moneda y escala compacta cuando aplica, por ejemplo `4.47T USD` o `96.68B USD`.
+- Flags booleanos del reporte se muestran como `Si` o `No`.
+- Si el proveedor LLM no responde o está deshabilitado, el pipeline usa un fallback determinista para `business_overview`, `investment_thesis`, `key_risks`, `executive_summary` y `near_term_outlook`.
+- El precio objetivo es estrictamente informativo: solo se muestra si existe un dato real de consenso (`targetMeanPrice` o equivalente) en Yahoo Finance.
+
+### Fuentes de Enriquecimiento de Mercado
+
+Los nuevos campos de mercado se extraen principalmente de `yfinance.Ticker.info`, `fast_info` y del historial reciente de precios:
+
+- `fullExchangeName` / `exchange` -> exchange de cotización
+- `previousClose` o historial reciente -> cierre previo y fecha
+- `currentPrice` / `lastPrice` -> precio de referencia actual
+- `targetMeanPrice` / `targetMedianPrice` -> target de consenso
+- `numberOfAnalystOpinions` / `numberOfAnalysts` -> cantidad de analistas
+- `longBusinessSummary` -> resumen descriptivo base del negocio
+
+La cobertura de estos campos depende del ticker y del mercado. Empresas fuera de EE. UU. o de baja cobertura pueden no traer target o número de analistas.
 
 ### Lanzar el Dashboard
 
@@ -146,6 +200,28 @@ python -m streamlit run dashboard/app.py --server.port 8500
 Acceso: **http://localhost:8500**
 
 El dashboard se actualiza automáticamente con el último CSV generado por el pipeline.
+
+### Descarga de Documento en Dashboard (Tab IA Reports)
+
+En la sección **Documento diario** del tab IA Reports ahora puedes:
+
+- Elegir cuántos tickers incluir (`Top 2`, `Top 5`, `Top 10`, `Top 20`)
+- Descargar en navegador el `.md` y `.txt` con nombre dinámico
+- Guardar un snapshot local en una carpeta elegible desde el propio dashboard
+
+Convención de nombre de archivo:
+
+- `dashboard_top{N}_{MMDDYYYY}.md`
+- `dashboard_top{N}_{MMDDYYYY}.txt`
+
+Ejemplo para 2 tickers el 10 de abril de 2026:
+
+- `dashboard_top2_04102026.txt`
+
+Notas operativas:
+
+- La descarga por navegador usa la carpeta configurada en tu navegador/SO (normalmente `Downloads`).
+- Si necesitas controlar la ruta exacta, usa **Guardar snapshot del documento** e indica la carpeta local en el campo de ruta.
 
 ### Actualizacion automatica (Windows PowerShell)
 
@@ -276,7 +352,21 @@ OLLAMA_API_KEY=
 OLLAMA_MODEL=gemma4:e2b
 OLLAMA_TIMEOUT_SECONDS=120
 OLLAMA_MAX_HEADLINES_PER_TICKER=8
+OLLAMA_BATCH_TOP_N=20
 OLLAMA_ENABLE_DASHBOARD_SUMMARY=true
+
+# === EMAIL DIGEST (opcional) ===
+EMAIL_REPORT_ENABLED=false
+EMAIL_REPORT_TOP_N=20
+EMAIL_REPORT_NEWS_PER_TICKER=3
+EMAIL_REPORT_SUBJECT_PREFIX=Top oportunidades
+EMAIL_REPORT_FROM=
+EMAIL_REPORT_TO=
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_USE_TLS=true
 ```
 
 Ver [`project/.env.example`](project/.env.example) para referencia completa.
@@ -312,6 +402,7 @@ finvizfinance >= 1.3.0  # opcional, para descubrimiento
 Flujo recomendado:
 - Pipeline diario para refrescar ranking y features.
 - Dashboard on-demand para revisar noticias Top 20 y alertas.
+- Digest opcional por correo en texto plano al terminar `update_all.ps1` o `update_all.sh`.
 - Si Ollama no esta disponible, el sistema debe degradar a fallback sin romper ejecucion.
 
 ## Integracion Ollama Cloud (API key)
@@ -330,10 +421,23 @@ Para desplegar en servidor sin depender de GPU/RAM local:
     - `llm_provider_used`
     - `llm_status`
     - `llm_fallback_reason`
+4. Si quieres digest por correo de las primeras 20 empresas, agrega tambien:
+    - `EMAIL_REPORT_ENABLED=true`
+    - `EMAIL_REPORT_FROM=<tu_correo_gmail>`
+    - `EMAIL_REPORT_TO=<destino1,destino2>`
+    - `SMTP_USER=<tu_correo_gmail>`
+    - `SMTP_PASS=<app_password_de_gmail>`
+    - `OLLAMA_BATCH_TOP_N=20`
 
 Seguridad:
 - Nunca subas `project/.env` al repositorio.
 - Si una key se expone, rotala de inmediato.
+
+## Proyecto Futuro
+
+Se agrego un plan para desplegar la plataforma como pagina web en una instancia de Google Compute Engine, con fases de infraestructura, seguridad y operacion:
+
+- `PROYECTO_FUTURO.md`
 
 ### Dashboard (`dashboard/requirements-dashboard.txt`)
 ```
@@ -357,6 +461,7 @@ numpy >= 1.26.0
 | Discovery no encuentra candidatos | Aumentar `DISCOVERY_MIN_SALES_GROWTH` o expandir `DISCOVERY_SECTORS` |
 | Ollama no responde | Verificar que `ollama serve` este activo y que el modelo exista en `ollama list` |
 | Ollama cloud devuelve 401/403 | Verificar `OLLAMA_API_KEY` en `project/.env` y rotar key si fue revocada |
+| El correo no sale | Verificar `EMAIL_REPORT_ENABLED=true`, `SMTP_USER`, `SMTP_PASS` y usar app password de Gmail |
 
 ---
 

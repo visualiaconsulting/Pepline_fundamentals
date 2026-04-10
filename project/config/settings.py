@@ -89,12 +89,28 @@ class Settings:
     ollama_model: str = os.getenv("OLLAMA_MODEL", "gemma4:e2b").strip()
     ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     ollama_max_headlines_per_ticker: int = int(os.getenv("OLLAMA_MAX_HEADLINES_PER_TICKER", "8"))
+    ollama_batch_top_n: int = int(os.getenv("OLLAMA_BATCH_TOP_N", "20"))
     ollama_enable_dashboard_summary: bool = _get_bool("OLLAMA_ENABLE_DASHBOARD_SUMMARY", "true")
+
+    email_report_enabled: bool = _get_bool("EMAIL_REPORT_ENABLED")
+    email_report_top_n: int = int(os.getenv("EMAIL_REPORT_TOP_N", "20"))
+    email_report_news_per_ticker: int = int(os.getenv("EMAIL_REPORT_NEWS_PER_TICKER", "3"))
+    email_report_subject_prefix: str = os.getenv("EMAIL_REPORT_SUBJECT_PREFIX", "Top oportunidades").strip()
+    email_report_from: str = os.getenv("EMAIL_REPORT_FROM", "").strip()
+    email_report_to: List[str] = field(default_factory=lambda: _get_csv_list("EMAIL_REPORT_TO", ""))
+    smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user: str = os.getenv("SMTP_USER", "").strip()
+    smtp_pass: str = os.getenv("SMTP_PASS", "").strip()
+    smtp_use_tls: bool = _get_bool("SMTP_USE_TLS", "true")
 
     def __post_init__(self) -> None:
         self.universe_tickers = list(self.manual_universe_tickers)
         if self.llm_provider not in {"openai", "ollama", "rule-based", "rule_based"}:
             self.llm_provider = "openai"
+        self.ollama_batch_top_n = max(1, self.ollama_batch_top_n)
+        self.email_report_top_n = max(1, self.email_report_top_n)
+        self.email_report_news_per_ticker = max(1, self.email_report_news_per_ticker)
 
 
 settings = Settings()

@@ -18,6 +18,8 @@ __pycache__/
 project/data/company_ranking.csv
 project/data/top10_opportunities.csv
 project/data/top10_opportunities*.csv
+project/data/top20_opportunities.csv
+project/data/top20_news.csv
 project/data/discovery_log.csv
 project/data/reports/
 

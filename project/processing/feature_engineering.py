@@ -50,7 +50,14 @@ class FeatureEngineeringPipeline:
 
         df = pd.DataFrame(rows)
         df.replace([float("inf"), float("-inf")], 0, inplace=True)
-        df.fillna(0, inplace=True)
+
+        numeric_columns = df.select_dtypes(include=["number"]).columns
+        text_columns = df.select_dtypes(include=["object"]).columns
+
+        if len(numeric_columns) > 0:
+            df[numeric_columns] = df[numeric_columns].fillna(0)
+        if len(text_columns) > 0:
+            df[text_columns] = df[text_columns].fillna("")
 
         self.logger.info("Feature dataset generated with %s rows", len(df))
         return df

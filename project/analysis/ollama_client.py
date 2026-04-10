@@ -68,9 +68,11 @@ class OllamaClient:
         parsed = self._parse_json_payload(text)
 
         return {
+            "business_overview": parsed.get("business_overview", ""),
             "investment_thesis": parsed.get("investment_thesis", ""),
             "key_risks": parsed.get("key_risks", ""),
             "executive_summary": parsed.get("executive_summary", ""),
+            "near_term_outlook": parsed.get("near_term_outlook", ""),
         }
 
     @staticmethod
@@ -104,11 +106,25 @@ class OllamaClient:
             joined_headlines = "Sin noticias"
 
         return (
-            "Eres un analista fundamental senior buscando oportunidades de compra largo (buy-side) o venta en corto(sell-side). "
-            "Responde SOLO JSON valido con estas llaves exactas: "
-            "investment_thesis, key_risks, executive_summary. "
-            "No uses markdown. No agregues texto fuera del JSON.\n"
+            "Eres un analista fundamental senior con enfoque buy-side y sell-side. "
+            "Evalua si el perfil actual del ticker sugiere oportunidad alcista, bajista o neutral usando fundamentales y noticias recientes. "
+            "Responde SIEMPRE en espanol. "
+            "Responde SOLO un JSON valido con exactamente estas llaves: business_overview, investment_thesis, key_risks, executive_summary, near_term_outlook. "
+            "No uses markdown. No agregues texto fuera del JSON. No inventes llaves adicionales. "
+            "Usa este formato exacto: {\"business_overview\":\"...\",\"investment_thesis\":\"...\",\"key_risks\":\"...\",\"executive_summary\":\"...\",\"near_term_outlook\":\"...\"}. "
+            "business_overview debe explicar en 1 o 2 frases que hace la empresa y como gana dinero. "
+            "investment_thesis debe tener 2 o 3 frases y conectar metricas con noticias. "
+            "key_risks debe resumir 2 o 3 riesgos materiales para los proximos 6 a 12 meses. "
+            "executive_summary debe ser una sola frase breve y especifica del ticker. "
+            "near_term_outlook debe resumir en 1 o 2 frases el sesgo esperado para las proximas semanas usando solo noticias recientes; si la senal no es clara, indica un sesgo neutral. "
+            "Considera ROIC alto como senal positiva de calidad y ventaja economica. "
+            "Considera Debt/Equity alto como riesgo de apalancamiento. "
+            "Considera crecimiento bajo o deterioro de margenes como senal de debilidad o maduracion. "
+            "Si los datos son mixtos, refleja el balance entre fortalezas y riesgos. "
+            "Evita frases genericas que podrian aplicar a cualquier empresa.\n"
             f"Ticker: {ticker}\n"
+            f"Empresa: {facts.get('company_name', '')}\n"
+            f"Negocio: {facts.get('business_summary', '')}\n"
             f"Clasificacion: {facts.get('classification', 'Neutral')}\n"
             f"Revenue Growth YoY: {facts.get('revenue_growth_yoy', 0)}\n"
             f"ROIC: {facts.get('roic', 0)}\n"

@@ -49,6 +49,7 @@ mkdir -p "$LOG_DIR"
   OLLAMA_BASE_URL=$(read_env "OLLAMA_BASE_URL" "http://localhost:11434")
   OLLAMA_API_KEY=$(read_env "OLLAMA_API_KEY" "")
   OLLAMA_MODEL=$(read_env "OLLAMA_MODEL" "gemma4:e2b")
+  EMAIL_REPORT_ENABLED=$(read_env "EMAIL_REPORT_ENABLED" "false")
 
   echo "[1/6] Git pull..."
   git checkout main
@@ -108,6 +109,15 @@ mkdir -p "$LOG_DIR"
   else
     echo "ERROR: no se generó company_ranking.csv"
     exit 1
+  fi
+
+  if [ "$EMAIL_REPORT_ENABLED" = "true" ]; then
+    echo "[Extra] Enviando digest por correo..."
+    if "$VENV_PY" -m reporting.email_digest; then
+      echo "OK: Digest de correo enviado o gestionado correctamente."
+    else
+      echo "WARNING: No se pudo enviar el digest por correo. Revisar configuración SMTP."
+    fi
   fi
 
   echo "Fin: $(date '+%Y-%m-%d %H:%M:%S')"

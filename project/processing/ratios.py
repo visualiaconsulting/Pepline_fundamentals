@@ -92,10 +92,18 @@ class RatioCalculator:
 
         return {
             "ticker": bundle.ticker,
+            "company_name": bundle.company_name,
             "sector": bundle.sector,
             "industry": bundle.industry,
+            "business_summary": bundle.business_summary,
+            "exchange": bundle.exchange,
             "market_cap": bundle.market_cap,
             "currency": bundle.currency,
+            "previous_close": bundle.previous_close,
+            "previous_close_date": bundle.previous_close_date,
+            "current_price": bundle.current_price,
+            "target_price": bundle.target_price,
+            "analyst_count": bundle.analyst_count,
             "revenue_growth_yoy": revenue_growth_yoy,
             "gross_margin": gross_margin,
             "operating_margin": operating_margin,

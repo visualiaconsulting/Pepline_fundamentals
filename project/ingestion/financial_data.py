@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -15,13 +16,21 @@ from utils.logger import setup_logger
 @dataclass
 class CompanyFinancialBundle:
     ticker: str
+    company_name: str
     sector: str
     industry: str
+    business_summary: str
+    exchange: str
     market_cap: float
     currency: str
     trailing_pe: float
     forward_pe: float
     ev_to_ebitda: float
+    previous_close: float
+    previous_close_date: str
+    current_price: float
+    target_price: float
+    analyst_count: int
     income_statement: pd.DataFrame
     balance_sheet: pd.DataFrame
     cashflow: pd.DataFrame
@@ -59,18 +68,99 @@ class FinancialDataIngestor:
     def _safe_ticker(self, ticker: str) -> yf.Ticker:
         return yf.Ticker(ticker)
 
+    @staticmethod
+    def _format_history_date(value: object) -> str:
+        if value is None:
+            return ""
+
+        try:
+            timestamp = pd.Timestamp(value)
+        except Exception:
+            return ""
+
+        if pd.isna(timestamp):
+            return ""
+
+        try:
+            if timestamp.tzinfo is not None:
+                timestamp = timestamp.tz_convert(None)
+        except Exception:
+            pass
+
+        return timestamp.strftime("%Y-%m-%d")
+
+    def _extract_market_snapshot(self, ticker_obj: yf.Ticker) -> Dict[str, object]:
+        history = pd.DataFrame()
+        try:
+            history = ensure_dataframe(ticker_obj.history(period="5d", auto_adjust=False))
+        except Exception as exc:
+            self.logger.warning("Failed to fetch price history for %s: %s", ticker_obj.ticker, exc)
+
+        if history.empty:
+            return {
+                "previous_close": 0.0,
+                "previous_close_date": "",
+                "current_price": 0.0,
+            }
+
+        close_series = pd.to_numeric(history.get("Close"), errors="coerce").dropna()
+        if close_series.empty:
+            return {
+                "previous_close": 0.0,
+                "previous_close_date": "",
+                "current_price": 0.0,
+            }
+
+        latest_idx = close_series.index[-1]
+        latest_close = safe_float(close_series.iloc[-1])
+
+        return {
+            "previous_close": latest_close,
+            "previous_close_date": self._format_history_date(latest_idx),
+            "current_price": latest_close,
+        }
+
     def _extract_company_info(self, ticker_obj: yf.Ticker) -> Dict:
         info = ticker_obj.info or {}
         fast_info = getattr(ticker_obj, "fast_info", {}) or {}
+        snapshot = self._extract_market_snapshot(ticker_obj)
+
+        current_price = safe_float(
+            info.get(
+                "currentPrice",
+                fast_info.get("lastPrice", snapshot.get("current_price", 0)),
+            )
+        )
+        previous_close = safe_float(
+            info.get(
+                "previousClose",
+                fast_info.get("previousClose", snapshot.get("previous_close", 0)),
+            )
+        )
+
+        target_price_raw = info.get("targetMeanPrice", info.get("targetMedianPrice", 0))
+        analyst_count_raw = info.get("numberOfAnalystOpinions", info.get("numberOfAnalysts", 0))
 
         return {
+            "company_name": str(
+                info.get("shortName")
+                or info.get("longName")
+                or getattr(ticker_obj, "ticker", "")
+            ),
             "sector": str(info.get("sector", "Unknown")),
             "industry": str(info.get("industry", "Unknown")),
+            "business_summary": str(info.get("longBusinessSummary", "")).strip(),
+            "exchange": str(info.get("fullExchangeName") or info.get("exchange") or "Unknown"),
             "market_cap": safe_float(info.get("marketCap", fast_info.get("marketCap", 0))),
             "currency": str(info.get("currency", "USD")),
             "trailing_pe": safe_float(info.get("trailingPE", 0)),
             "forward_pe": safe_float(info.get("forwardPE", 0)),
             "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda", 0)),
+            "previous_close": previous_close,
+            "previous_close_date": str(snapshot.get("previous_close_date", "")),
+            "current_price": current_price,
+            "target_price": safe_float(target_price_raw, default=0.0),
+            "analyst_count": int(pd.to_numeric(analyst_count_raw, errors="coerce") or 0),
         }
 
     def fetch_company_financials(self, ticker: str) -> Optional[CompanyFinancialBundle]:
@@ -99,13 +189,21 @@ class FinancialDataIngestor:
 
             bundle = CompanyFinancialBundle(
                 ticker=ticker,
+                company_name=info["company_name"],
                 sector=info["sector"],
                 industry=info["industry"],
+                business_summary=info["business_summary"],
+                exchange=info["exchange"],
                 market_cap=info["market_cap"],
                 currency=info["currency"],
                 trailing_pe=info["trailing_pe"],
                 forward_pe=info["forward_pe"],
                 ev_to_ebitda=info["ev_to_ebitda"],
+                previous_close=info["previous_close"],
+                previous_close_date=info["previous_close_date"],
+                current_price=info["current_price"],
+                target_price=info["target_price"],
+                analyst_count=info["analyst_count"],
                 income_statement=income_statement,
                 balance_sheet=balance_sheet,
                 cashflow=cashflow,
