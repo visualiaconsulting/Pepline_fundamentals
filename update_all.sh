@@ -50,19 +50,18 @@ mkdir -p "$LOG_DIR"
   OLLAMA_BASE_URL=$(read_env "OLLAMA_BASE_URL" "http://localhost:11434")
   OLLAMA_API_KEY=$(read_env "OLLAMA_API_KEY" "")
   OLLAMA_MODEL=$(read_env "OLLAMA_MODEL" "gemma4:e2b")
-  EMAIL_REPORT_ENABLED=$(read_env "EMAIL_REPORT_ENABLED" "false")
 
-  echo "[1/6] Git pull..."
+  echo "[1/5] Git pull..."
   git checkout main
   git pull origin main
 
-  echo "[2/6] Instalar dependencias pipeline..."
+  echo "[2/5] Instalar dependencias pipeline..."
   "$VENV_PY" -m pip install -r "$PROJECT_DIR/requirements.txt"
 
-  echo "[3/6] Instalar dependencias dashboard..."
+  echo "[3/5] Instalar dependencias dashboard..."
   "$VENV_PY" -m pip install -r "$PROJECT_DIR/dashboard/requirements-dashboard.txt"
 
-  echo "[4/6] Preflight LLM..."
+  echo "[4/5] Preflight LLM..."
   if [ "$LLM_PROVIDER" = "gemini" ]; then
     echo "LLM_PROVIDER=gemini detectado. Verificando comando '$GEMINI_CLI_COMMAND'..."
     if command -v "$GEMINI_CLI_COMMAND" >/dev/null 2>&1 || "$GEMINI_CLI_COMMAND" --help >/dev/null 2>&1; then
@@ -91,7 +90,7 @@ mkdir -p "$LOG_DIR"
     echo "LLM_PROVIDER=$LLM_PROVIDER. Se omite preflight de LLM local."
   fi
 
-  echo "[5/6] Ejecutar pipeline..."
+  echo "[5/5] Ejecutar pipeline..."
   cd "$PROJECT_DIR"
   "$VENV_PY" main.py 2>&1 | tee "$PIPELINE_RUN_LOG"
 
@@ -111,21 +110,12 @@ mkdir -p "$LOG_DIR"
     echo "OK: No se detectaron estados financieros incompletos."
   fi
 
-  echo "[6/6] Verificación rápida de salida..."
+  echo "Verificación rápida de salida..."
   if [ -f "$PROJECT_DIR/data/company_ranking.csv" ]; then
     echo "OK: company_ranking.csv generado."
   else
     echo "ERROR: no se generó company_ranking.csv"
     exit 1
-  fi
-
-  if [ "$EMAIL_REPORT_ENABLED" = "true" ]; then
-    echo "[Extra] Enviando digest por correo..."
-    if "$VENV_PY" -m reporting.email_digest; then
-      echo "OK: Digest de correo enviado o gestionado correctamente."
-    else
-      echo "WARNING: No se pudo enviar el digest por correo. Revisar configuración SMTP."
-    fi
   fi
 
   echo "Fin: $(date '+%Y-%m-%d %H:%M:%S')"

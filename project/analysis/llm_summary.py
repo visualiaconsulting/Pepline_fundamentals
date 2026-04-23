@@ -490,7 +490,7 @@ class LLMSummaryGenerator:
             if result.get("llm_status") == "ok":
                 return result
             
-            self.logger.warning("Gemini CLI fallo, intentando Ollama como fallback")
+            self.logger.warning("Gemini CLI fallo (%s), intentando Ollama como fallback", result.get("llm_fallback_reason"))
             result_ollama = self._ollama_narrative(row, headlines)
             if result_ollama.get("llm_status") == "ok":
                 result_ollama["llm_fallback_reason"] = (

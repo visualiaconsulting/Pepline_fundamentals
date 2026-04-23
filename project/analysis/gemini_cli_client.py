@@ -19,13 +19,14 @@ class GeminiCLIClient:
     def health_check(self) -> Tuple[bool, str]:
         try:
             # Intentamos ejecutar el comando para ver si responde
-            # Usamos --help o similar como prueba de vida minima
+            # Usamos shell=True para que Windows busque en el PATH correctamente
             result = subprocess.run(
                 [self.command, "--help"],
                 capture_output=True,
                 text=True,
                 timeout=10,
-                check=False
+                check=False,
+                shell=True
             )
             if result.returncode == 0 or "gemini" in result.stdout.lower():
                 return True, "ok"
@@ -42,15 +43,15 @@ class GeminiCLIClient:
         )
         
         try:
-            # Ejecutamos el comando gemini con el prompt
-            # Asumimos que el comando toma el prompt como un argumento posicional
-            # Si el CLI requiere stdin, se podria ajustar a input=prompt
+            # Ejecutamos el comando gemini con el prompt via stdin y flag -p para modo headless
             result = subprocess.run(
-                [self.command, prompt],
+                [self.command, "-p"],
+                input=prompt,
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
-                check=True
+                check=True,
+                shell=True
             )
             
             text = result.stdout.strip()

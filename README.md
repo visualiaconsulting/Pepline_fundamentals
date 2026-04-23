@@ -98,7 +98,13 @@ copy .env.example .env      # Windows
 
 ## Uso
 
-### Ejecutar el Pipeline
+### Ejecutar el Pipeline y Dashboard automáticamente (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\update_all.ps1
+```
+
+### Ejecutar el Pipeline manualmente
 
 ```bash
 cd project

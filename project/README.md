@@ -45,14 +45,6 @@ Variables clave:
 - `OLLAMA_TIMEOUT_SECONDS`: timeout por request al modelo
 - `OLLAMA_MAX_HEADLINES_PER_TICKER`: limite de titulares por ticker para analisis
 - `OLLAMA_BATCH_TOP_N`: cuantas empresas reciben análisis completo por corrida
-- `EMAIL_REPORT_ENABLED`: activa digest en texto plano por correo al terminar `update_all`
-- `EMAIL_REPORT_TOP_N`: cantidad de empresas incluidas en el digest
-- `EMAIL_REPORT_NEWS_PER_TICKER`: numero de noticias con link por empresa en el digest
-- `EMAIL_REPORT_FROM`: remitente visible del correo
-- `EMAIL_REPORT_TO`: destinatarios separados por coma
-- `SMTP_HOST` / `SMTP_PORT`: servidor SMTP
-- `SMTP_USER` / `SMTP_PASS`: credenciales SMTP
-- `SMTP_USE_TLS`: activa STARTTLS para el envio
 
 Recomendado para cloud con bajo consumo:
 - `OLLAMA_MODEL=minimax-m2.7:cloud`
@@ -148,7 +140,6 @@ Se generan automáticamente:
 - `data/top20_news.csv`
 - `data/discovery_log.csv` (si discovery está activado)
 - `data/reports/{TICKER}_report.txt`
-- `data/reports/daily_email_digest.txt` (si el digest se construye)
 - logs en `logs/pipeline.log`
 
 ## 5) Flujo del Pipeline
@@ -168,9 +159,7 @@ Se generan automáticamente:
 3. Si usaras Gemini CLI (default), confirma que el comando `gemini` este en tu PATH.
 4. Si usaras Ollama como fallback, confirma servicio y modelo (`ollama list`)
 5. Si usaras cloud, confirma que `OLLAMA_API_KEY` este cargada en `.env`
-6. Ejecuta pipeline: `python main.py`
-7. Abre dashboard: `python -m streamlit run dashboard/app.py --server.port 8500`
-8. En tab Noticias, pulsa actualizar para refrescar feed y analisis
+6. Ejecuta pipeline y abre dashboard: `powershell -ExecutionPolicy Bypass -File .\update_all.ps1`
 
 ### Ejecucion diaria automatizada (Windows)
 
@@ -180,11 +169,4 @@ Desde la raiz del repo:
 powershell -ExecutionPolicy Bypass -File .\update_all.ps1
 ```
 
-Si quieres ejecutar update y abrir dashboard automaticamente:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -OpenDashboard -DashboardPort 8500
-```
-
-Este script actualiza codigo, dependencias, valida Gemini CLI / Ollama y ejecuta el pipeline.
-Si `EMAIL_REPORT_ENABLED=true`, al final intenta enviar un digest en texto plano con las primeras empresas, los resultados de IA y links de noticias.
+Este script actualiza codigo, dependencias, valida Gemini CLI / Ollama, ejecuta el pipeline y abre el dashboard automáticamente.
