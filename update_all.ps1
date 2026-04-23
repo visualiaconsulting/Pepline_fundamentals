@@ -47,6 +47,24 @@ function Get-EnvValue {
     return $value
 }
 
+function Clear-LogFile {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        try {
+            Remove-Item $Path -Force -ErrorAction Stop
+        }
+        catch {
+            try {
+                # Si no se puede borrar, intentamos vaciarlo
+                Clear-Content $Path -ErrorAction Stop
+            }
+            catch {
+                Write-Log "WARNING: No se pudo limpiar $Path. Puede que este bloqueado por otro proceso."
+            }
+        }
+    }
+}
+
 if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir | Out-Null
 }
@@ -79,7 +97,6 @@ try {
     Write-Log "[4/6] Preflight Gemini CLI..."
     if ($llmProvider -eq "gemini") {
         Write-Log "LLM_PROVIDER=gemini detectado. Verificando comando '$geminiCliCommand'..."
-        # En Windows shell, probamos con gemini --version o similar
         $geminiCheck = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $geminiCliCommand --version" -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
         if ($geminiCheck -and $geminiCheck.ExitCode -eq 0) {
             Write-Log "OK: Gemini CLI encontrado."
@@ -95,12 +112,8 @@ try {
     }
     else {
         Set-Location $ProjectDir
-        if (Test-Path $PipelineRunLog) {
-            Remove-Item $PipelineRunLog -Force
-        }
-        if (Test-Path $PipelineErrLog) {
-            Remove-Item $PipelineErrLog -Force
-        }
+        Clear-LogFile $PipelineRunLog
+        Clear-LogFile $PipelineErrLog
 
         $startProcessArgs = @{
             FilePath = $VenvPy
@@ -112,20 +125,28 @@ try {
             RedirectStandardOutput = $PipelineRunLog
             RedirectStandardError = $PipelineErrLog
         }
-        $proc = Start-Process @startProcessArgs
+        
+        try {
+            $proc = Start-Process @startProcessArgs
+            
+            if (Test-Path $PipelineRunLog) {
+                Get-Content $PipelineRunLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+            }
+            if (Test-Path $PipelineErrLog) {
+                Get-Content $PipelineErrLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+            }
 
-        if (Test-Path $PipelineRunLog) {
-            Get-Content $PipelineRunLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+            if ($proc.ExitCode -ne 0) {
+                throw "Pipeline terminó con código de salida $($proc.ExitCode)"
+            }
+            Write-Log "OK: Pipeline finalizado correctamente."
         }
-        if (Test-Path $PipelineErrLog) {
-            Get-Content $PipelineErrLog | Out-File -FilePath $RunLog -Append -Encoding utf8
+        catch {
+            if ($_.Exception.Message -match "utilizado en otro proceso") {
+                throw "ERROR: Los archivos de log estan bloqueados. Por favor cierra cualquier editor o proceso que los use y reintenta."
+            }
+            throw
         }
-
-        if ($proc.ExitCode -ne 0) {
-            throw "Pipeline terminó con código de salida $($proc.ExitCode)"
-        }
-
-        Write-Log "OK: Pipeline finalizado correctamente."
     }
 
     Write-Log "[6/6] Verificacion de salida e inicio de Dashboard..."
@@ -138,12 +159,7 @@ try {
     }
 
     Write-Log "[Extra] Iniciando dashboard Streamlit..."
-    $StreamlitRunLog = Join-Path $LogDir "streamlit_dashboard.log"
-    $StreamlitErrLog = Join-Path $LogDir "streamlit_dashboard.err.log"
-
-    if (Test-Path $StreamlitRunLog) { Remove-Item $StreamlitRunLog -Force }
-    if (Test-Path $StreamlitErrLog) { Remove-Item $StreamlitErrLog -Force }
-
+    
     $dashboardArgs = @(
         "-m",
         "streamlit",
