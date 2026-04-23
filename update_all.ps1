@@ -8,7 +8,10 @@ $ErrorActionPreference = 'Stop'
 
 $RootDir = $PSScriptRoot
 $ProjectDir = Join-Path $RootDir "project"
-$VenvPy = Join-Path $RootDir ".venv\Scripts\python.exe"
+$VenvPy = Join-Path $ProjectDir ".venv\Scripts\python.exe"
+if (-not (Test-Path $VenvPy)) {
+    $VenvPy = Join-Path $RootDir ".venv\Scripts\python.exe"
+}
 $LogDir = Join-Path $ProjectDir "logs"
 $RunLog = Join-Path $LogDir "daily_update.log"
 $PipelineRunLog = Join-Path $LogDir "pipeline_last_run.log"
@@ -27,7 +30,7 @@ function Write-Log {
 
 function Get-EnvValue {
     param(
-        [string]$Key,
+         [string]$Key,
         [string]$DefaultValue = ""
     )
 
@@ -61,53 +64,58 @@ try {
         throw "No se encontro Python del entorno virtual: $VenvPy"
     }
 
-    $llmProvider = Get-EnvValue -Key "LLM_PROVIDER" -DefaultValue "openai"
+    $llmProvider = Get-EnvValue -Key "LLM_PROVIDER" -DefaultValue "gemini"
+    $geminiCliCommand = Get-EnvValue -Key "GEMINI_CLI_COMMAND" -DefaultValue "gemini"
+    $lmstudioBaseUrl = Get-EnvValue -Key "LMSTUDIO_BASE_URL" -DefaultValue "http://localhost:1234/v1"
+    $lmstudioModel = Get-EnvValue -Key "LMSTUDIO_MODEL" -DefaultValue "gemma-4-e2b-it"
     $ollamaBaseUrl = Get-EnvValue -Key "OLLAMA_BASE_URL" -DefaultValue "http://localhost:11434"
     $ollamaApiKey = Get-EnvValue -Key "OLLAMA_API_KEY" -DefaultValue ""
-    $ollamaModel = Get-EnvValue -Key "OLLAMA_MODEL" -DefaultValue "gemma4:e2b"
+    $ollamaModel = Get-EnvValue -Key "OLLAMA_MODEL" -DefaultValue "minimax-m2.7:cloud"
     $emailReportEnabled = (Get-EnvValue -Key "EMAIL_REPORT_ENABLED" -DefaultValue "false").ToLower()
 
-    Write-Log "[1/6] Git pull..."
+    Write-Log "[1/7] Git pull..."
     git checkout main | Out-Null
     git pull origin main | Out-Null
 
-    Write-Log "[2/6] Instalar dependencias pipeline..."
+    Write-Log "[2/7] Instalar dependencias pipeline..."
     & $VenvPy -m pip install -r (Join-Path $ProjectDir "requirements.txt") | Out-Null
 
-    Write-Log "[3/6] Instalar dependencias dashboard..."
+    Write-Log "[3/7] Instalar dependencias dashboard..."
     & $VenvPy -m pip install -r (Join-Path $ProjectDir "dashboard\requirements-dashboard.txt") | Out-Null
 
-    Write-Log "[4/6] Preflight Ollama (si aplica)..."
-    if ($llmProvider -eq "ollama") {
-        Write-Log "LLM_PROVIDER=ollama detectado. Verificando endpoint y modelo..."
-        try {
-            $tagsUrl = "$($ollamaBaseUrl.TrimEnd('/'))/api/tags"
-            $headers = @{}
-            if (-not [string]::IsNullOrWhiteSpace($ollamaApiKey)) {
-                $headers["Authorization"] = "Bearer $ollamaApiKey"
-            }
-            $response = Invoke-RestMethod -Uri $tagsUrl -Method Get -TimeoutSec 15 -Headers $headers
-            $models = @()
-            if ($response.models) {
-                $models = $response.models | ForEach-Object { $_.name }
-            }
-
-            if ($models -contains $ollamaModel) {
-                Write-Log "OK: Modelo Ollama encontrado ($ollamaModel)."
-            }
-            else {
-                Write-Log "WARNING: Modelo no encontrado en Ollama ($ollamaModel). Ejecuta: ollama run $ollamaModel"
-            }
+    Write-Log "[4/7] Preflight Gemini CLI..."
+    if ($llmProvider -eq "gemini") {
+        Write-Log "LLM_PROVIDER=gemini detectado. Verificando comando '$geminiCliCommand'..."
+        $geminiCheck = Get-Command $geminiCliCommand -ErrorAction SilentlyContinue
+        if ($geminiCheck) {
+            Write-Log "OK: Gemini CLI encontrado."
         }
-        catch {
-            Write-Log "WARNING: Ollama endpoint no disponible en $ollamaBaseUrl. Ejecuta: ollama serve"
+        else {
+            Write-Log "WARNING: Gemini CLI no encontrado en el PATH. Se intentara Ollama como fallback."
         }
     }
     else {
-        Write-Log "LLM_PROVIDER=$llmProvider. Se omite preflight de Ollama."
+        Write-Log "LLM_PROVIDER=$llmProvider. Se omite preflight de Gemini CLI."
     }
 
-    Write-Log "[5/6] Ejecutar pipeline..."
+    Write-Log "[5/7] Preflight Ollama / Fallbacks..."
+    if ($llmProvider -eq "ollama" -or $llmProvider -eq "gemini") {
+        Write-Log "Verificando configuracion de Ollama para uso principal o fallback..."
+        try {
+            $tagsUrl = "$($ollamaBaseUrl.TrimEnd('/'))/api/tags"
+            $headers = @{}
+            if ($ollamaApiKey) {
+                 $headers = @{ "Authorization" = "Bearer $ollamaApiKey" }
+            }
+            $response = Invoke-RestMethod -Uri $tagsUrl -Method Get -TimeoutSec 15 -Headers $headers
+            Write-Log "OK: Ollama accesible en $ollamaBaseUrl"
+        }
+        catch {
+            Write-Log "WARNING: Ollama no respondio: $($_.Exception.Message)"
+        }
+    }
+
+    Write-Log "[6/7] Ejecutar pipeline..."
     if ($SkipPipeline) {
         Write-Log "SKIP: pipeline omitido por parametro -SkipPipeline"
     }
@@ -177,7 +185,7 @@ try {
         }
     }
 
-    Write-Log "[6/6] Verificacion de salida..."
+    Write-Log "[7/7] Verificacion de salida..."
     $rankingFile = Join-Path $ProjectDir "data\company_ranking.csv"
     if (Test-Path $rankingFile) {
         Write-Log "OK: company_ranking.csv generado."
@@ -188,6 +196,12 @@ try {
 
     if ($OpenDashboard) {
         Write-Log "[Extra] Iniciando dashboard Streamlit..."
+        $StreamlitRunLog = Join-Path $LogDir "streamlit_dashboard.log"
+        $StreamlitErrLog = Join-Path $LogDir "streamlit_dashboard.err.log"
+
+        if (Test-Path $StreamlitRunLog) { Remove-Item $StreamlitRunLog -Force }
+        if (Test-Path $StreamlitErrLog) { Remove-Item $StreamlitErrLog -Force }
+
         $dashboardArgs = @(
             "-m",
             "streamlit",
@@ -199,8 +213,30 @@ try {
             "$DashboardPort"
         )
 
-        Start-Process -FilePath $VenvPy -ArgumentList $dashboardArgs -WorkingDirectory $ProjectDir | Out-Null
-        Write-Log "Dashboard lanzado en http://localhost:$DashboardPort"
+        $dashboardProcess = Start-Process -FilePath $VenvPy -ArgumentList $dashboardArgs -WorkingDirectory $ProjectDir -NoNewWindow -PassThru -RedirectStandardOutput $StreamlitRunLog -RedirectStandardError $StreamlitErrLog
+
+        Start-Sleep -Seconds 3
+
+        if ($dashboardProcess.HasExited) {
+            $errorMsg = "Streamlit proceso murio con exit code: $($dashboardProcess.ExitCode)"
+            Write-Log "ERROR: $errorMsg"
+            if (Test-Path $StreamlitErrLog) {
+                $errorContent = Get-Content $StreamlitErrLog -Raw
+                if ($errorContent) {
+                    Write-Log "Streamlit stderr: $errorContent"
+                }
+            }
+            if (Test-Path $StreamlitRunLog) {
+                $runContent = Get-Content $StreamlitRunLog -Raw
+                if ($runContent) {
+                    Write-Log "Streamlit stdout: $runContent"
+                }
+            }
+            throw $errorMsg
+        } else {
+            Write-Log "OK: Streamlit proceso iniciado (PID: $($dashboardProcess.Id))"
+            Write-Log "Dashboard disponible en http://localhost:$DashboardPort"
+        }
     }
 
     if ($emailReportEnabled -eq "true") {

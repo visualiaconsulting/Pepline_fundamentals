@@ -35,15 +35,16 @@ Variables clave:
 - `DISCOVERY_SECTORS`: sectores que alimentan el discovery
 - `TICKER_BLOCKLIST`: tickers que nunca deben entrar por discovery
 - `ENABLE_LLM_SUMMARY`: activar resumen opcional LLM (`true/false`)
-- `LLM_PROVIDER`: proveedor LLM (`openai` u `ollama`)
+- `LLM_PROVIDER`: proveedor LLM (`gemini`, `ollama`, `openai` o `lmstudio`)
+- `GEMINI_CLI_COMMAND`: comando o ruta del ejecutable de Gemini CLI (default `gemini`)
 - `OPENAI_API_KEY`: solo si usas OpenAI
 - `OPENAI_MODEL`: modelo OpenAI
-- `OLLAMA_BASE_URL`: endpoint local/remoto de Ollama
+- `OLLAMA_BASE_URL`: endpoint local/remoto de Ollama (usado como fallback si Gemini falla)
 - `OLLAMA_API_KEY`: token para Ollama cloud (vacío en local)
 - `OLLAMA_MODEL`: modelo Ollama (ejemplo: `gemma4:e2b`)
 - `OLLAMA_TIMEOUT_SECONDS`: timeout por request al modelo
 - `OLLAMA_MAX_HEADLINES_PER_TICKER`: limite de titulares por ticker para analisis
-- `OLLAMA_BATCH_TOP_N`: cuantas empresas reciben análisis Ollama completo por corrida
+- `OLLAMA_BATCH_TOP_N`: cuantas empresas reciben análisis completo por corrida
 - `EMAIL_REPORT_ENABLED`: activa digest en texto plano por correo al terminar `update_all`
 - `EMAIL_REPORT_TOP_N`: cantidad de empresas incluidas en el digest
 - `EMAIL_REPORT_NEWS_PER_TICKER`: numero de noticias con link por empresa en el digest
@@ -164,11 +165,12 @@ Se generan automáticamente:
 
 1. Actualiza codigo: `git pull origin main`
 2. Verifica dependencias: `pip install -r requirements.txt`
-3. Si usaras Ollama, confirma servicio y modelo (`ollama list`)
-4. Si usaras cloud, confirma que `OLLAMA_API_KEY` este cargada en `.env`
-5. Ejecuta pipeline: `python main.py`
-6. Abre dashboard: `python -m streamlit run dashboard/app.py --server.port 8500`
-7. En tab Noticias, pulsa actualizar para refrescar feed y analisis
+3. Si usaras Gemini CLI (default), confirma que el comando `gemini` este en tu PATH.
+4. Si usaras Ollama como fallback, confirma servicio y modelo (`ollama list`)
+5. Si usaras cloud, confirma que `OLLAMA_API_KEY` este cargada en `.env`
+6. Ejecuta pipeline: `python main.py`
+7. Abre dashboard: `python -m streamlit run dashboard/app.py --server.port 8500`
+8. En tab Noticias, pulsa actualizar para refrescar feed y analisis
 
 ### Ejecucion diaria automatizada (Windows)
 
@@ -184,5 +186,5 @@ Si quieres ejecutar update y abrir dashboard automaticamente:
 powershell -ExecutionPolicy Bypass -File .\update_all.ps1 -OpenDashboard -DashboardPort 8500
 ```
 
-Este script actualiza codigo, dependencias, valida Ollama (si `LLM_PROVIDER=ollama`) y ejecuta el pipeline.
+Este script actualiza codigo, dependencias, valida Gemini CLI / Ollama y ejecuta el pipeline.
 Si `EMAIL_REPORT_ENABLED=true`, al final intenta enviar un digest en texto plano con las primeras empresas, los resultados de IA y links de noticias.

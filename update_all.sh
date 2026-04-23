@@ -45,7 +45,8 @@ mkdir -p "$LOG_DIR"
 
   cd "$ROOT_DIR"
 
-  LLM_PROVIDER=$(read_env "LLM_PROVIDER" "openai")
+  LLM_PROVIDER=$(read_env "LLM_PROVIDER" "gemini")
+  GEMINI_CLI_COMMAND=$(read_env "GEMINI_CLI_COMMAND" "gemini")
   OLLAMA_BASE_URL=$(read_env "OLLAMA_BASE_URL" "http://localhost:11434")
   OLLAMA_API_KEY=$(read_env "OLLAMA_API_KEY" "")
   OLLAMA_MODEL=$(read_env "OLLAMA_MODEL" "gemma4:e2b")
@@ -61,8 +62,15 @@ mkdir -p "$LOG_DIR"
   echo "[3/6] Instalar dependencias dashboard..."
   "$VENV_PY" -m pip install -r "$PROJECT_DIR/dashboard/requirements-dashboard.txt"
 
-  echo "[4/6] Preflight Ollama (si aplica)..."
-  if [ "$LLM_PROVIDER" = "ollama" ]; then
+  echo "[4/6] Preflight LLM..."
+  if [ "$LLM_PROVIDER" = "gemini" ]; then
+    echo "LLM_PROVIDER=gemini detectado. Verificando comando '$GEMINI_CLI_COMMAND'..."
+    if command -v "$GEMINI_CLI_COMMAND" >/dev/null 2>&1 || "$GEMINI_CLI_COMMAND" --help >/dev/null 2>&1; then
+      echo "OK: Gemini CLI encontrado."
+    else
+      echo "WARNING: Gemini CLI no encontrado. Se intentara Ollama como fallback en el pipeline."
+    fi
+  elif [ "$LLM_PROVIDER" = "ollama" ]; then
     echo "LLM_PROVIDER=ollama detectado. Verificando endpoint y modelo..."
     CURL_AUTH_ARGS=()
     if [ -n "$OLLAMA_API_KEY" ]; then
@@ -80,7 +88,7 @@ mkdir -p "$LOG_DIR"
       echo "WARNING: Ejecuta: ollama serve"
     fi
   else
-    echo "LLM_PROVIDER=$LLM_PROVIDER. Se omite preflight de Ollama."
+    echo "LLM_PROVIDER=$LLM_PROVIDER. Se omite preflight de LLM local."
   fi
 
   echo "[5/6] Ejecutar pipeline..."
