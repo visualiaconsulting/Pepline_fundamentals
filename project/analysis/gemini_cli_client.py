@@ -43,9 +43,9 @@ class GeminiCLIClient:
         )
         
         try:
-            # Ejecutamos el comando gemini con el prompt via stdin y flag -p para modo headless
+            # Ejecutamos el comando gemini con el prompt via stdin y flag -p ' ' para modo headless.
             result = subprocess.run(
-                [self.command, "-p"],
+                [self.command, "-p", " ", "--yolo"],
                 input=prompt,
                 capture_output=True,
                 text=True,
