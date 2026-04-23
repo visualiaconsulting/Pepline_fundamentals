@@ -40,6 +40,9 @@ def run_pipeline() -> None:
                 discovered_candidates=discovered_candidates,
                 blocklist=settings.ticker_blocklist,
                 max_new_tickers=settings.discovery_max_new_tickers,
+                include_global_sp500=settings.include_global_sp500,
+                include_global_europe=settings.include_global_europe,
+                include_global_hk=settings.include_global_hk,
             )
             final_universe = universe_result.final_tickers
             origin_by_ticker = universe_result.origin_by_ticker

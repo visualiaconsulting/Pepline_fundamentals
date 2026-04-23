@@ -80,6 +80,11 @@ class Settings:
         default_factory=lambda: [ticker.strip().upper() for ticker in _get_csv_list("TICKER_BLOCKLIST", "")]
     )
 
+    # Market Expansion Library flags
+    include_global_sp500: bool = _get_bool("INCLUDE_GLOBAL_SP500", "false")
+    include_global_europe: bool = _get_bool("INCLUDE_GLOBAL_EUROPE", "false")
+    include_global_hk: bool = _get_bool("INCLUDE_GLOBAL_HK", "false")
+
     enable_llm_summary: bool = _get_bool("ENABLE_LLM_SUMMARY")
     llm_provider: str = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
     gemini_cli_command: str = os.getenv("GEMINI_CLI_COMMAND", "gemini").strip()
